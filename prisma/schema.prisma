@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?  @unique
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userCode String   @unique
+  payment  Payment?
+
+  buyerTransactions  Transaction[] @relation("BuyerTransactions")
+  sellerTransactions Transaction[] @relation("SellerTransactions")
+  disputes           Dispute[]     @relation("UserDisputes")
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  transCode        String            @unique
+  title            String
+  amount           Float
+  status           TransactionStatus @default(PENDING)
+  buyerId          String
+  sellerId         String? // ✅ optional now
+  sellerMomoNumber String? // ✅ required in all cases
+  itemImage        String?
+  deliveryNumber   String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  releaseDate      DateTime?
+  payment          Payment?
+
+  // Relations
+  buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller User? @relation("SellerTransactions", fields: [sellerId], references: [id]) // ✅ optional relation
+
+  dispute Dispute?
+}
+
+model Dispute {
+  id            String        @id @default(uuid())
+  reason        String
+  resolution    String?
+  status        DisputeStatus @default(OPEN)
+  userId        String
+  transactionId String        @unique()
+  createdAt     DateTime      @default(now())
+  resolvedAt    DateTime?
+
+  user        User        @relation("UserDisputes", fields: [userId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  transactionId String        @unique
+  userId        String        @unique // The payer (buyer)
+  amount        Float
+  paymentMethod String // e.g. "MTN MoMo", "Vodafone", "Card"
+  reference     String        @unique // Gateway transaction reference
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+}
+
+enum TransactionStatus {
+  PENDING
+  IN_ESCROW
+  COMPLETED
+  CANCELED
+  DISPUTED
+}
+
+// 
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+  INPROGRESS
+  CANCELED
+}
+
+// PAYMENT ENUMS
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+
+/*LINK - 
+  1. Create schema
+  2. run npx prisma format - cleans up schema correctly
+  3. npx prisma generate - generate type correctly
+  4. npx prisma db push - push local schema to database
+  4.5. npx prisma migrate dev - npx prisma migrate dev 
+*/
