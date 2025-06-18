@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { UserService } from './user.service';
-import { PrismaClient,Prisma } from '@prisma/client';
+// import { PrismaClient,Prisma } from '../../generated/prisma';
+import { Prisma } from '@prisma/client';
 
 
 
@@ -14,13 +15,23 @@ export class UserController {
     }
 
     @Post()
-    addNew(@Body() data:Prisma.UserCreateInput){
+    addNew(@Body() data:any){
         return  this.user.createUser(data);
     }
 
     @Post('login')
     loginUser(@Body() data:{phone:string,password:string}){
         return this.user.loginUser(data);
+    }
+
+    @Post('reset-password')
+    resetPassword(@Body() data:{phone:string,password:string}){
+        return this.user.resetPassword(data);
+    }
+
+    @Get(':userCode')
+    getUserByUserCode(@Param('userCode') userCode:string){
+        return this.user.getUserByUserCode(userCode);
     }
 
     @Get(':id')

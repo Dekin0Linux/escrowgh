@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
-import { generateUserCode } from 'utils';
-import { PrismaClient,Prisma } from '@prisma/client';
-import { comparePassword, hashPassword } from 'utils/hashpwd';
+const { generateUserCode } = require('../../utils/index');
+import { PrismaClient, Prisma } from '@prisma/client';
+const { comparePassword, hashPassword } = require('../../utils/hashpwd');
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
@@ -22,13 +22,15 @@ export class UserService {
     return this.jwtService.sign(payload);
   }
 
+  // GET ALL USERS
   async getAllUsers() {
     const users = await this.db.user.findMany();
     return users.map(({ password, ...rest }) => rest); //exclude pwd
   }
 
 
-  async createUser(data: Prisma.UserCreateInput) {
+  // CREATE USER
+  async createUser(data: any) {
     try {
       const hashedPassword = await hashPassword(data.password);
       const newUser = await this.db.user.create({
@@ -83,6 +85,20 @@ export class UserService {
     };
   }
 
+  // GET USER BY USERCODE
+  async getUserByUserCode(userCode: string) {
+    try {
+      const user = await this.db.user.findUnique({ where: { userCode } });
+      if (!user) throw new NotFoundException('User not found');
+      //remove password
+      const { password, ...rest } = user;
+      
+      return {message:"User found",user:rest};
+    } catch (error) {
+      throw new NotFoundException('User not found');
+    }
+  }
+
   async getUserById(id: string) {
     const user = await this.db.user.findUnique({ where: { id },select: {
         id: true,
@@ -97,13 +113,13 @@ export class UserService {
   }
 
 
-
   async updateUser(id: string, data:any) {
     try {
-      return await this.db.user.update({
+      await this.db.user.update({
         where: { id },
         data,
       });
+      return {message:"User updated successfully"}
     } catch (error) {
       if (error.code === 'P2025') {
         throw new NotFoundException('User not found');
@@ -115,13 +131,32 @@ export class UserService {
 
   async deleteUser(id: string) {
     try {
-      return await this.db.user.delete({ where: { id } });
+      await this.db.user.delete({ where: { id } });
+      return  {message:"User deleted successfully"}
     } catch (error) {
       throw new NotFoundException('User not found');
     }
   }
 
-  async resetPassword(){
+  async resetPassword(data: { phone: string; password: string }){
 
+    try {
+      const user = await this.db.user.findUnique({ where: { phone: data.phone } });
+      if (!user) throw new NotFoundException('User not found');
+      const hashedPassword = await hashPassword(data.password);
+      await this.db.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+
+      // return success message
+      return {message:"User password reset successfully"}
+      
+    } catch (error) {
+      throw new BadRequestException('Failed to reset password');
+    }
   }
+
+
+  
 }
