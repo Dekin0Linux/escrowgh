@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config'; // 👈 import config module
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TransactionModule } from './transaction/transaction.module';
@@ -8,7 +9,16 @@ import { DisputeModule } from './dispute/dispute.module';
 import { DatabaseModule } from './database/database.module';
 
 @Module({
-  imports: [TransactionModule, PaymentModule, UserModule, DisputeModule, DatabaseModule,DatabaseModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true, // 👈 makes env vars available app-wide
+    }),
+    TransactionModule,
+    PaymentModule,
+    UserModule,
+    DisputeModule,
+    DatabaseModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -14,6 +14,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -23,8 +24,8 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  userCode String   @unique
-  payment  Payment?
+  userCode String?   @unique
+  payments  Payment[]
 
   buyerTransactions  Transaction[] @relation("BuyerTransactions")
   sellerTransactions Transaction[] @relation("SellerTransactions")
@@ -38,8 +39,8 @@ model Transaction {
   amount           Float
   status           TransactionStatus @default(PENDING)
   buyerId          String
-  sellerId         String? // ✅ optional now
-  sellerMomoNumber String? // ✅ required in all cases
+  sellerId         String? // 
+  sellerMomoNumber String? // 
   itemImage        String?
   deliveryNumber   String?
   createdAt        DateTime          @default(now())
@@ -49,7 +50,7 @@ model Transaction {
 
   // Relations
   buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
-  seller User? @relation("SellerTransactions", fields: [sellerId], references: [id]) // ✅ optional relation
+  seller User? @relation("SellerTransactions", fields: [sellerId], references: [id]) // 
 
   dispute Dispute?
 }
@@ -71,7 +72,7 @@ model Dispute {
 model Payment {
   id            String        @id @default(uuid())
   transactionId String        @unique
-  userId        String        @unique // The payer (buyer)
+  userId        String        // The payer (buyer)
   amount        Float
   paymentMethod String // e.g. "MTN MoMo", "Vodafone", "Card"
   reference     String        @unique // Gateway transaction reference
@@ -102,7 +103,7 @@ enum DisputeStatus {
 // PAYMENT ENUMS
 enum PaymentStatus {
   PENDING
-  SUCCESS
+  COMPLETED
   FAILED
   REFUNDED
 }

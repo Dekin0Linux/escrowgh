@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { generateUserCode } from 'utils';
+import { PrismaClient,Prisma } from '@prisma/client';
+import { comparePassword, hashPassword } from 'utils/hashpwd';
 
 @Injectable()
 export class UserService {
@@ -12,17 +14,31 @@ export class UserService {
   }
 
 
-//   Prisma.UserCreateInput
-  async createUser(data: any ) {
+  async createUser(data: Prisma.UserCreateInput ) {
 
     try {
-      return await this.db.user.create({ data });
+      const hashedPassword = await hashPassword(data.password);
+      return await this.db.user.create({data:{...data,userCode:generateUserCode(),password:hashedPassword}});
     } catch (error) {
       // Handle Prisma unique constraint error
       if (error.code === 'P2002') {
+        console.log(error)
         throw new BadRequestException(`Duplicate field: ${error.meta?.target}`);
       }
       throw new BadRequestException('Could not create user');
+    }
+  }
+
+
+  async loginUser(data:{phone:string,password:string}){
+    try{
+      const user = await this.db.user.findUnique({ where: { phone:data.phone } });
+      if (!user) throw new NotFoundException('User not found');
+      const isMatch = await comparePassword(data.password, user.password);
+      if (!isMatch) throw new BadRequestException('Invalid password');
+      return {user,access_token:"1234"};
+    }catch(err){
+      throw new BadRequestException('Failed to login user');
     }
   }
 
