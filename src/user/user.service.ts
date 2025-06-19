@@ -4,6 +4,8 @@ const { generateUserCode } = require('../../utils/index');
 import { PrismaClient, Prisma } from '@prisma/client';
 const { comparePassword, hashPassword } = require('../../utils/hashpwd');
 import { JwtService } from '@nestjs/jwt';
+import { sendSMS } from 'utils/sms';
+
 
 @Injectable()
 export class UserService {
@@ -42,8 +44,10 @@ export class UserService {
       });
   
       const access_token = this.generateToken(newUser);
+      let smsMsg = `Welcome ${newUser.name}, your user code is ${newUser.userCode}. Use it to access your account.`;
+      sendSMS(newUser?.phone!, smsMsg); 
   
-      return {
+      return {  
         user: {
           id: newUser.id,
           name: newUser.name,

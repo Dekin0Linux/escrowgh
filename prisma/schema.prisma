@@ -7,14 +7,12 @@
 generator client {
   provider = "prisma-client-js"
   // output   = "../generated/prisma"
-  
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 
 model User {
   id        String   @id @default(uuid())
@@ -24,9 +22,10 @@ model User {
   phone     String?  @unique
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userCode String?   @unique
-  payments  Payment[]
+  payments Payment[]
 
   buyerTransactions  Transaction[] @relation("BuyerTransactions")
   sellerTransactions Transaction[] @relation("SellerTransactions")
@@ -34,7 +33,7 @@ model User {
 }
 
 model Transaction {
-  id               String            @id @default(uuid())
+  id               String            @id @default(uuid())  @unique
   transCode        String            @unique
   title            String
   amount           Float
@@ -48,12 +47,29 @@ model Transaction {
   updatedAt        DateTime          @updatedAt
   releaseDate      DateTime?
   payment          Payment?
+  commission       Commission?
+  currency         String @default("GHS") // Default to Ghanaian Cedi
+  commissionFee    Float? // Optional, can be calculated from commission model
 
   // Relations
   buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller User? @relation("SellerTransactions", fields: [sellerId], references: [id]) // 
 
   dispute Dispute?
+}
+
+model Commission {
+  id            String   @id @default(uuid())
+  transactionId String   @unique
+  transCode     String
+  userCode      String?
+  sellerPhone   String?
+  commissionFee Float
+  isPaid        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  // Relations
+  transaction Transaction @relation(fields: [transactionId], references: [id])
 }
 
 model Dispute {
@@ -73,7 +89,7 @@ model Dispute {
 model Payment {
   id            String        @id @default(uuid())
   transactionId String        @unique
-  userId        String        // The payer (buyer)
+  userId        String // The payer (buyer)
   amount        Float
   paymentMethod String // e.g. "MTN MoMo", "Vodafone", "Card"
   reference     String        @unique // Gateway transaction reference
@@ -109,11 +125,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
-
-/*LINK - 
-  1. Create schema
-  2. run npx prisma format - cleans up schema correctly
-  3. npx prisma generate - generate type correctly
-  4. npx prisma db push - push local schema to database
-  4.5. npx prisma migrate dev - npx prisma migrate dev 
-*/
+/**
+ * LINK -
+ * 1. Create schema
+ * 2. run npx prisma format - cleans up schema correctly
+ * 3. npx prisma generate - generate type correctly
+ * 4. npx prisma db push - push local schema to database
+ * 4.5. npx prisma migrate dev - npx prisma migrate dev
+ */

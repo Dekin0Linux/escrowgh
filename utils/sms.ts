@@ -1,7 +1,7 @@
 import axios from "axios";
 
 
-function sendSMS(recipient, msg) {
+function sendSMS(recipient:string, msg:string) {
 
     // DATA TO BE SENT
     const data = {
