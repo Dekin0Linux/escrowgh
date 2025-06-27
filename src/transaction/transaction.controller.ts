@@ -25,6 +25,8 @@ export class TransactionController {
     return this.transactionService.createTransaction(dto);
   }   
 
+
+  // update transaction status
   @UseGuards(JwtAuthGuard)
   @Post('update-status')
   async updateTransactionStatus(@Body() dto: { id: string; status: string }) {
@@ -32,6 +34,7 @@ export class TransactionController {
   }
 
 
+  // update transaction info
   @UseGuards(JwtAuthGuard)
   @Put()
   async updateTransaction(@Body() dto: { id: string; data: CreateTransactionDto }) {
