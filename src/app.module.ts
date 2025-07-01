@@ -9,6 +9,7 @@ import { DisputeModule } from './dispute/dispute.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { CommisionsModule } from './commisions/commisions.module';
+import { SettlementModule } from './settlement/settlement.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CommisionsModule } from './commisions/commisions.module';
     DatabaseModule,
     AuthModule,
     CommisionsModule,
+    SettlementModule,
   ],
   controllers: [AppController],
   providers: [AppService],

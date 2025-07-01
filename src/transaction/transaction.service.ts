@@ -1,154 +1,367 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { generateUserTransCode } from '../../utils/index'; // Adjust the import path as necessary
+import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
 import { sendSMS } from '../../utils/sms';
+import { PaymentStatus, TransactionStatus } from '@prisma/client';
 
 @Injectable()
 export class TransactionService {
-    constructor(private readonly db: DatabaseService) { }
+  constructor(private readonly db: DatabaseService) { }
 
-    async getAllTransactions(paginationDto: { limit?: number; page?: number }) {
-        const { limit = 10, page = 1 } = paginationDto;
-        const skip = (page - 1) * limit;
+  async getAllTransactions(paginationDto: { limit?: number; page?: number }) {
+    const { limit = 10, page = 1 } = paginationDto;
+    const skip = (page - 1) * limit;
 
-        const [transactions, total] = await Promise.all([
-            this.db.transaction.findMany({
-                skip,
-                take: limit,
-                orderBy: { createdAt: 'desc' },
-                include: {
-                    buyer: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                            phone: true,
-                            userCode: true,
-                            isAdmin: true,
-                        },
-                    },
-                    seller: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                            phone: true,
-                            userCode: true,
-                            isAdmin: true,
-                        },
-                    },
-                    dispute: true,
-                    payment: true,
-                },
-            }),
-            this.db.transaction.count(),
-        ]);
+    const [transactions, total] = await Promise.all([
+      this.db.transaction.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              isAdmin: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              isAdmin: true,
+            },
+          },
+          dispute: true,
+          payment: true,
+        },
+      }),
+      this.db.transaction.count(),
+    ]);
 
-        // send sms to the seller phone number
-        
+    return {
+      data: transactions, // array of transactions
+      total, //total number of records
+      page, // current page number
+      lastPage: Math.ceil(total / limit), // last page number
+    };
+  }
 
-        return {
-            data: transactions, // array of transactions
-            total, //total number of records
-            page, // current page number
-            lastPage: Math.ceil(total / limit), // last page number
-        };
+
+  // CREATE TRANSACTION
+  async createTransaction(data: CreateTransactionDto) {
+    const transCode = generateUserTransCode();
+    try {
+      const newTransaction = await this.db.transaction.create({
+        data: {
+          ...data,
+          transCode,
+        },
+      });
+
+      return { message: "Transaction created successfully" ,id:newTransaction.id };
+    } catch (error) {
+      // Optional: handle known Prisma errors specifically
+      if (error.code === 'P2002') {
+        throw new BadRequestException('Transaction with this code already exists.');
+      }
+      throw new InternalServerErrorException('Failed to create transaction.');
+    }
+  }
+
+  // get transaction status
+  async getTransactionStatus(id: string) {
+    try {
+      const transaction = await this.db.transaction.findUnique({ where: { id } });
+      return transaction?.status;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get transaction status.', error);
+    }
+  }
+
+
+  // update transaction info
+  async updateTransactionInfo(id: string, data: CreateTransactionDto) {
+    try {
+      await this.db.transaction.update({
+        where: { id },
+        data,
+      });
+      return { message: "Transaction updated successfully" };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update transaction info.', error);
+    }
+  }
+
+
+  // DELETE TRANSACTION
+  async deleteTransaction(id: string) {
+    try {
+      const deletedTransaction = await this.db.transaction.delete({
+        where: { id },
+      });
+      return { message: "Transaction deleted successfully" };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete transaction.', error);
+    }
+  }
+
+  // GET TRANSACTION BY ID
+  async getTransactionById(id: string) {
+    try {
+      // add buyer and seller info
+      const transaction = await this.db.transaction.findUnique({ 
+        where: { id }, 
+        include: { 
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              isAdmin: true,
+            },
+          }, 
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              isAdmin: true,
+            },
+          }, 
+          dispute: true, 
+          payment: true,
+
+        } 
+      });
+      return transaction;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get transaction.', error);
+    }
+  }
+
+  // GET TRANSACTION BY 
+  async getTransactionByCode(code: string) {
+    try {
+      const transaction = await this.db.transaction.findUnique({ where: { transCode: code } });
+      return transaction;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get transaction.', error);
+    }
+  }
+
+  // update transaction status
+  async updateTransactionStatus(id: string, status: any) {
+    try {
+      const updatedTransaction = await this.db.transaction.update({
+        where: { id },
+        data: { status },
+      });
+      return updatedTransaction;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update transaction status.', error);
+    }
+  }
+
+  // FILTER TRANSACTIONS WITH PAGINATION
+  async filterTransactions(filter: any, pagination: { page: number; limit: number }) {
+    try {
+      const page = pagination?.page > 0 ? pagination.page : 1;
+      const limit = pagination?.limit > 0 ? pagination.limit : 10;
+      const skip = (page - 1) * limit;
+
+      const where = filter || {};
+
+      const [transactions, total] = await Promise.all([
+        this.db.transaction.findMany({
+          where,
+          include: {
+            buyer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                userCode: true,
+                isAdmin: true,
+              },
+            },
+            seller: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                userCode: true,
+                isAdmin: true,
+              },
+            },
+            dispute: true,
+            payment: true,
+          },
+          skip,
+          take: limit,
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+        this.db.transaction.count({ where }),
+      ]);
+
+      return {
+        data: transactions,
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      console.error('[Filter Transactions Error]', error);
+      throw new InternalServerErrorException('Failed to filter transactions.');
+    }
+  }
+
+  // service to release funds to seller number and check status as COMPLETED
+  async releaseFunds(transactionId: string, buyerId: string) {
+    const transaction = await this.db.transaction.findUnique({
+      where: { id: transactionId },
+      include: { payment: true },
+    });
+
+    if (!transaction || transaction.buyerId !== buyerId) {
+      throw new BadRequestException('Transaction not found or unauthorized.');
     }
 
-
-    // CREATE TRANSACTION
-    async createTransaction(data: CreateTransactionDto) {
-        const transCode = generateUserTransCode();
-        try {
-            const newTransaction = await this.db.transaction.create({
-                data: {
-                    ...data,
-                    transCode,
-                },
-            });
-
-            const buyer = await this.db.user.findUnique({ where: { id: newTransaction?.buyerId! } });
-
-            const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${newTransaction?.title}, with transaction code ${newTransaction?.transCode} has been initiated by ${buyer?.name!} worth GHS ${newTransaction?.amount!}. Please visit https://escrowgh.com/approve/${newTransaction?.transCode} to approve or view details`;
-            sendSMS(newTransaction?.sellerMomoNumber!, smsMsg);
-
-            return {message:"Transaction created successfully"};
-        } catch (error) {
-            // Optional: handle known Prisma errors specifically
-            if (error.code === 'P2002') {
-                throw new BadRequestException('Transaction with this code already exists.');
-            }
-            throw new InternalServerErrorException('Failed to create transaction.');
-        }
+    if (transaction.status !== 'IN_ESCROW') {
+      throw new BadRequestException('Funds cannot be released at this stage.');
     }
 
+    // Create settlement record
+    await this.db.settlement.create({
+      data: {
+        transactionId,
+        amount: transaction?.amount,
+        releasedTo: transaction?.sellerId! || transaction?.sellerMomoNumber!,
+        type: 'RELEASE_TO_SELLER',
+      },
+    });
 
-    // update transaction info
-    async updateTransactionInfo(id: string, data: CreateTransactionDto) {
-        try {
-            await this.db.transaction.update({
-                where: { id },
-                data,
-            });
-            return {message:"Transaction updated successfully"};
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to update transaction info.',error);
-        }
-    }
+    await this.db.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: 'COMPLETED',
+        releaseDate: new Date(),
+      },
+    });
 
-
-    // DELETE TRANSACTION
-    async deleteTransaction(id: string) {
-        try {
-            const deletedTransaction = await this.db.transaction.delete({
-                where: { id },
-            });
-            return {message:"Transaction deleted successfully"};
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to delete transaction.',error);
-        }
-    }
-
-    // GET TRANSACTION BY ID
-    async getTransactionById(id: string) {
-        try {
-            const transaction = await this.db.transaction.findUnique({ where: { id } });
-            return transaction;
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to get transaction.',error);
-        }
-    }
-
-    // GET TRANSACTION BY 
-    async getTransactionByCode(code: string) {
-        try {
-            const transaction = await this.db.transaction.findUnique({ where: { transCode: code } });
-            return transaction;
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to get transaction.',error);
-        }
-    }
-
-    // update transaction status
-    async updateTransactionStatus(id: string, status: any) {
-        try {
-            const updatedTransaction = await this.db.transaction.update({
-                where: { id },
-                data: { status },
-            });
-            return updatedTransaction;
-        } catch (error) {
-            throw new InternalServerErrorException('Failed to update transaction status.',error);
-        }
-    }
+    // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
 
     
 
+    return { message: 'Funds released to seller.' };
+  }
+
+  // get user statistics
+  async getUserStatistics(userId: string) {
+    try {
+
+      const user = await this.db.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found.');
+      }
+      const transactions = await this.db.transaction.findMany({
+        where: { buyerId: userId },
+      });
+      const totalTransactions = transactions.length;
+      const pendingPayments = transactions.filter((t) => t.status === 'PENDING').length;
+      const disputesCount = transactions.filter((t: any) => t.dispute).length;
+      const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
+      const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
+      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get user statistics.', error);
+    }
+  }
 
 
-    
+  // update isPaid field and create payment record
+  async updateIsPaid(transactionId: string, body: any) {
+    try {
+      const transaction = await this.db.transaction.findUnique({ where: { id: transactionId } });
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found.');
+      }
+      await this.db.transaction.update({
+        where: { id: transactionId },
+        data: { isFunded: true, status: 'IN_ESCROW' },
+      });
+      await this.db.payment.create({
+        data: {
+          transactionId,
+          userId: transaction.buyerId,
+          amount: transaction.amount,
+          paymentMethod: 'MOMO',
+          reference: body.reference,
+          status: body.status,
+        },
+      });
+      // get buyer
+      const buyer = await this.db.user.findUnique({ where: { id: transaction?.buyerId! } });
 
+      // send sms to seller
+      const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction?.title}, with transaction code ${transaction?.transCode} has been initiated by ${buyer?.name!} worth GHS ${transaction?.amount!}. Please visit https://escrowgh.com/approve/${transaction?.transCode} to approve or view details`;
+      sendSMS(transaction?.sellerMomoNumber!, smsMsg);
 
+      return {status: 'success', message: 'Transaction paid successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update transaction.', error);
+    }
+  }
+
+  // GET RECENCENT TRANSACRTIONS of user add buyer and seller info
+  async getRecentTransactions(userId: string) {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        where: { buyerId: userId },
+        take: 10,
+        orderBy: {
+          createdAt: 'desc', 
+        },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+        },
+      });
+      return transactions;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get recent transactions.', error);
+    }
+  }
 
 }

@@ -68,25 +68,37 @@ export class UserService {
 
 
   async loginUser(data: { phone: string; password: string }) {
-    const user = await this.db.user.findUnique({ where: { phone: data.phone } });
-    if (!user) throw new NotFoundException('User not found');
+    try {
+      const user = await this.db.user.findUnique({ where: { phone: data.phone } });
+      if (!user) throw new NotFoundException('User not found');
   
-    const isMatch = await comparePassword(data.password, user.password);
-    if (!isMatch) throw new BadRequestException('Invalid password');
+      const isMatch = await comparePassword(data.password, user.password);
+      if (!isMatch) throw new BadRequestException('Invalid password');
   
-    const access_token = this.generateToken(user);
+      const access_token = this.generateToken(user);
   
-    return {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        userCode: user.userCode,
-        isAdmin: user.isAdmin,
-      },
-      access_token,
-    };
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          userCode: user.userCode,
+          isAdmin: user.isAdmin,
+        },
+        access_token,
+      };
+  
+    } catch (error) {
+      console.error('Login error:', error);
+  
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
+  
+      // ✅ For unknown/unexpected errors, send a generic message
+      throw new BadRequestException('Something went wrong during login');
+    }
   }
 
   // GET USER BY USERCODE
