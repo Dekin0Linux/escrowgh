@@ -31,6 +31,6 @@ jobs:
             npm run build
           
             echo "🚀 Restarting NestJS app with PM2..."
-            pm2 restart escrowgh || pm2 start dist/src/main.js --name escrowgh
+            pm2 start dist/src/main.js --name escrowgh --watch
           
             echo "✅ Deploy complete!"
