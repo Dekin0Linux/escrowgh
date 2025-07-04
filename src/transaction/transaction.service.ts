@@ -364,4 +364,39 @@ export class TransactionService {
     }
   }
 
+  async getUserTransactions(userId: string) {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        where: { buyerId: userId },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+        },
+      });
+      return transactions;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get users transactions.', error);
+    }
+  }
+
 }
+
+// get users transactions
+
+
