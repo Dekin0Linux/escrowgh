@@ -284,7 +284,11 @@ export class TransactionService {
       });
       const totalTransactions = transactions.length;
       const pendingPayments = transactions.filter((t) => t.status === 'PENDING').length;
-      const disputesCount = transactions.filter((t: any) => t.dispute).length;
+      // const disputesCount = transactions.filter((t: any) => t.dispute).length;
+      const openDisputesCount = await this.db.dispute.count({ where: { userId, status: 'OPEN' } });
+      const inProgressDisputesCount = await this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } });
+      const disputesCount = openDisputesCount + inProgressDisputesCount;
+      
       const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
       const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
       return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate };

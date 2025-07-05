@@ -148,4 +148,60 @@ export class DisputeService {
           throw new InternalServerErrorException('Failed to fetch disputes,Invalid status provided',error);
         }
     }
+
+    // get dispute by transaction id
+    /*
+    @param transactionId: string 
+    */
+    async getDisputesByTransactionId(transactionId: string) {
+        try {
+          const disputes = await this.db.dispute.findMany({
+            where: { transactionId },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+              transaction: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+    
+          return disputes;
+        } catch (error) {
+          throw new InternalServerErrorException('Failed to fetch disputes by transaction id',error);
+        }
+    }
+
+    // get dispute by user id
+    /*
+    @param userId: string 
+    */
+    async getDisputesByUserId(userId: string) {
+        try {
+          const disputes = await this.db.dispute.findMany({
+            where: { userId },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+              transaction: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+    
+          return disputes;
+        } catch (error) {
+          throw new InternalServerErrorException('Failed to fetch disputes by user id',error);
+        }
+    }
 }

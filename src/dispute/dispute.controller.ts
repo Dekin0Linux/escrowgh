@@ -38,4 +38,11 @@ export class DisputeController {
     async getDisputes(@Query('status') status?: string) {
         return this.disputeService.getDisputesByStatus(status);
     }
+
+
+    @UseGuards(JwtAuthGuard)
+    @Get('userDisputes/:id')
+    async getDisputesByTransactionId(@Param('id') id: string) {
+        return this.disputeService.getDisputesByUserId(id);
+    }
 }
