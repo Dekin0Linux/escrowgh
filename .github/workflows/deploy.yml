@@ -31,10 +31,10 @@ jobs:
             npm run build
           
             echo "🚀 Restarting NestJS app with PM2..."
-            if pm2 list | grep -q escrowghapi; then
+            if pm2 list | grep -q escrowapi; then
               pm2 restart escrowghapi --update-env
             else
-              pm2 start dist/src/main.js --name escrowghapi --watch --update-env
+              pm2 start dist/src/main.js --name escrowapi --watch --update-env
             fi
           
             echo "✅ Deploy complete!"
