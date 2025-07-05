@@ -32,7 +32,7 @@ jobs:
           
             echo "🚀 Restarting NestJS app with PM2..."
             if pm2 list | grep -q escrowapi; then
-              pm2 restart escrowghapi --update-env
+              pm2 restart escrowapi --update-env
             else
               pm2 start dist/src/main.js --name escrowapi --watch --update-env
             fi
