@@ -291,7 +291,7 @@ export class TransactionService {
       
       const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
       const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
-      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate };
+      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate: successRate?.toFixed(2) };
     } catch (error) {
       throw new InternalServerErrorException('Failed to get user statistics.', error);
     }
