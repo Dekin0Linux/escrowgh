@@ -204,4 +204,29 @@ export class DisputeService {
           throw new InternalServerErrorException('Failed to fetch disputes by user id',error);
         }
     }
+
+    // get the count of each dispute status
+    /*
+    @param userId: string 
+    */
+    async getDisputesStatusCountByUserId(userId: string) {
+        try {
+          const [resolved, inProgress, open, rejected] = await Promise.all([
+            this.db.dispute.count({ where: { userId, status: 'RESOLVED' } }),
+            this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } }),
+            this.db.dispute.count({ where: { userId, status: 'OPEN' } }),
+            this.db.dispute.count({ where: { userId, status: 'REJECTED' } }),
+          ]);
+    
+          return {resolved, inProgress, open, rejected};
+        } catch (error) {
+          throw new InternalServerErrorException('Failed to get disputes status count by user id',error);
+        }
+    }
+
+   
+
+
+
+    
 }

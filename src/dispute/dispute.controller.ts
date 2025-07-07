@@ -26,6 +26,8 @@ export class DisputeController {
         return this.disputeService.createDispute(id, req.user.userId, reason);
     }
 
+    
+
     // SETTLE DISPUTE
     @UseGuards(JwtAuthGuard, IsAdminGuard)
     @Post(':id/settle')
@@ -45,4 +47,16 @@ export class DisputeController {
     async getDisputesByTransactionId(@Param('id') id: string) {
         return this.disputeService.getDisputesByUserId(id);
     }
+
+    // get the count of each dispute status
+    /*
+    @param userId: string 
+    */
+    @UseGuards(JwtAuthGuard)
+    @Get('disputeStatusCount/:id')
+    async getDisputesStatusCount(@Param('id') id: string) {
+        return this.disputeService.getDisputesStatusCountByUserId(id);
+    }
+
+
 }
