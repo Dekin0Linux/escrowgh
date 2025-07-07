@@ -7,7 +7,6 @@ export class DisputeService {
     constructor(private readonly db: DatabaseService) { }
 
     // get all disputes
-
     async getAllDisputes() {
         try {
             const disputes = await this.db.dispute.findMany();
