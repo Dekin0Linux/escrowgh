@@ -109,6 +109,13 @@ export class TransactionController {
     return this.transactionService.updateIsPaid(id, body);
   }
 
+  // get users transactions
+  @UseGuards(JwtAuthGuard)
+  @Get('/getUserTransactions/:userId')
+  async getUserTransactions(@Param('userId') userId: string) {
+    return this.transactionService.getUserTransactions(userId);
+  }
+
 
 
 }

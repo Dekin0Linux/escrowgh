@@ -284,10 +284,14 @@ export class TransactionService {
       });
       const totalTransactions = transactions.length;
       const pendingPayments = transactions.filter((t) => t.status === 'PENDING').length;
-      const disputesCount = transactions.filter((t: any) => t.dispute).length;
+      // const disputesCount = transactions.filter((t: any) => t.dispute).length;
+      const openDisputesCount = await this.db.dispute.count({ where: { userId, status: 'OPEN' } });
+      const inProgressDisputesCount = await this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } });
+      const disputesCount = openDisputesCount + inProgressDisputesCount;
+      
       const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
       const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
-      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate };
+      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate: successRate?.toFixed(2) };
     } catch (error) {
       throw new InternalServerErrorException('Failed to get user statistics.', error);
     }
@@ -364,4 +368,39 @@ export class TransactionService {
     }
   }
 
+  async getUserTransactions(userId: string) {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        where: { buyerId: userId },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+            },
+          },
+        },
+      });
+      return transactions;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get users transactions.', error);
+    }
+  }
+
 }
+
+// get users transactions
+
+
