@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DisputeStatus } from '@prisma/client';
 import { DatabaseService } from 'src/database/database.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import * as multer from 'multer';
 
 @Injectable()
 export class DisputeService {
-    constructor(private readonly db: DatabaseService) { }
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly cloudinaryService: CloudinaryService) { }
 
     // get all disputes
 
@@ -23,8 +27,9 @@ export class DisputeService {
     @param transactionId: string
     @param userId: string
     @param reason: string
+    @param file: File
     */
-    async createDispute(transactionId: string, userId: string, reason: string) {
+    async createDispute(transactionId: string, userId: string, reason: string, file: Express.Multer.File) {
         try {
             const transaction = await this.db.transaction.findUnique({
                 where: { id: transactionId },
@@ -39,13 +44,17 @@ export class DisputeService {
                 data: { status: 'DISPUTED' },
             });
 
-            await this.db.dispute.create({
-                data: {
-                    transactionId,
-                    userId,
-                    reason,
-                },
-            });
+            if (file) {
+                const imageUrl = await this.cloudinaryService.uploadImage(file);
+                await this.db.dispute.create({
+                    data: {
+                        transactionId,
+                        userId,
+                        reason,
+                        evidence: imageUrl,
+                    },
+                });
+            }
 
             return {message:"Dispute created successfully"};
 

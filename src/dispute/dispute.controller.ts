@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, UploadedFile, UseGuards,UseInterceptors } from '@nestjs/common';
 import { DisputeService } from './dispute.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('dispute')
 export class DisputeController {
@@ -21,9 +22,10 @@ export class DisputeController {
     @param req: Request
     */
     @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FileInterceptor('image'))
     @Post(':id')
-    createDispute(@Param('id') id: string, @Body('reason') reason: string, @Request() req) {
-        return this.disputeService.createDispute(id, req.user.userId, reason);
+    createDispute(@Param('id') id: string, @Body('reason') reason: string, @Request() req, @UploadedFile() file: Express.Multer.File) {
+        return this.disputeService.createDispute(id, req.user.userId, reason, file);
     }
 
     // SETTLE DISPUTE
