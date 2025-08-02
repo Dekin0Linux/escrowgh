@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('transaction')
 export class TransactionController {
@@ -19,9 +20,10 @@ export class TransactionController {
 
   // CREATE TRANSACTION
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
   @Post()
-  async create(@Body() dto: CreateTransactionDto) {
-    return this.transactionService.createTransaction(dto);
+  async create(@Body() dto: CreateTransactionDto, @UploadedFile() file: Express.Multer.File) {
+    return this.transactionService.createTransaction(dto, file);
   }
 
 
@@ -31,7 +33,6 @@ export class TransactionController {
   async updateTransactionStatus(@Body() dto: { id: string; status: string }) {
     return this.transactionService.updateTransactionStatus(dto.id, dto.status);
   }
-
 
   // UPDATE TRANSACTION
   @UseGuards(JwtAuthGuard)

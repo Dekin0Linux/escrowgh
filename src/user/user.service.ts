@@ -44,7 +44,7 @@ export class UserService {
       });
   
       const access_token = this.generateToken(newUser);
-      let smsMsg = `Welcome ${newUser.name}, your user code is ${newUser.userCode}. Use it to access your account.`;
+      let smsMsg = `Welcome ${newUser.name}, your account has been created successfully. Please login to your account to start using our services.`;
       sendSMS(newUser?.phone!, smsMsg); 
   
       return {  

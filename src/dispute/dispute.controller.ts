@@ -22,13 +22,11 @@ export class DisputeController {
     @param req: Request
     */
     @UseGuards(JwtAuthGuard)
-    @UseInterceptors(FileInterceptor('image'))
+    @UseInterceptors(FileInterceptor('file'))
     @Post(':id')
-    createDispute(@Param('id') id: string, @Body('reason') reason: string, @Request() req, @UploadedFile() file: Express.Multer.File) {
-        return this.disputeService.createDispute(id, req.user.userId, reason, file);
+    createDispute(@Param('id') id: string, @Body() payload: any, @Request() req: any, @UploadedFile() file: Express.Multer.File) {
+        return this.disputeService.createDispute(req.user.userId, payload, file);
     }
-
-    
 
     // SETTLE DISPUTE
     @UseGuards(JwtAuthGuard, IsAdminGuard)
