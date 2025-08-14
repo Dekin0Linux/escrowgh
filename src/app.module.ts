@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { CommisionsModule } from './commisions/commisions.module';
 import { SettlementModule } from './settlement/settlement.module';
+import { CloudinaryService } from './cloudinary/cloudinary.service';
 
 @Module({
   imports: [
@@ -26,6 +27,6 @@ import { SettlementModule } from './settlement/settlement.module';
     SettlementModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, CloudinaryService],
 })
 export class AppModule {}

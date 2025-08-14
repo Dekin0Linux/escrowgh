@@ -4,10 +4,11 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
 import { sendSMS } from '../../utils/sms';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly db: DatabaseService) { }
+  constructor(private readonly db: DatabaseService, private readonly cloudinaryService: CloudinaryService) { }
 
   async getAllTransactions(paginationDto: { limit?: number; page?: number }) {
     const { limit = 10, page = 1 } = paginationDto;
@@ -44,6 +45,7 @@ export class TransactionService {
         },
       }),
       this.db.transaction.count(),
+
     ]);
 
     return {
@@ -54,25 +56,32 @@ export class TransactionService {
     };
   }
 
-
   // CREATE TRANSACTION
-  async createTransaction(data: CreateTransactionDto) {
+  async createTransaction(data: any, file: Express.Multer.File) {
     const transCode = generateUserTransCode();
+
     try {
+      let parsedData = data;
+      if (typeof data.payload === 'string') {
+        parsedData = JSON.parse(data.payload);
+      }
       const newTransaction = await this.db.transaction.create({
         data: {
-          ...data,
+          ...parsedData,
           transCode,
+          itemImage: file ? await this.cloudinaryService.uploadImage(file) : null,
         },
       });
 
-      return { message: "Transaction created successfully" ,id:newTransaction.id };
+      return { message: "Transaction created successfully", id: newTransaction.id };
     } catch (error) {
       // Optional: handle known Prisma errors specifically
       if (error.code === 'P2002') {
         throw new BadRequestException('Transaction with this code already exists.');
       }
-      throw new InternalServerErrorException('Failed to create transaction.');
+
+      console.log(error.message)
+      throw new InternalServerErrorException('Failed to create transaction.', error.message);
     }
   }
 
@@ -88,7 +97,7 @@ export class TransactionService {
 
 
   // update transaction info
-  async updateTransactionInfo(id: string, data: CreateTransactionDto) {
+  async updateTransactionInfo(id: string, data: any) {
     try {
       await this.db.transaction.update({
         where: { id },
@@ -117,9 +126,9 @@ export class TransactionService {
   async getTransactionById(id: string) {
     try {
       // add buyer and seller info
-      const transaction = await this.db.transaction.findUnique({ 
-        where: { id }, 
-        include: { 
+      const transaction = await this.db.transaction.findUnique({
+        where: { id },
+        include: {
           buyer: {
             select: {
               id: true,
@@ -129,7 +138,7 @@ export class TransactionService {
               userCode: true,
               isAdmin: true,
             },
-          }, 
+          },
           seller: {
             select: {
               id: true,
@@ -139,11 +148,11 @@ export class TransactionService {
               userCode: true,
               isAdmin: true,
             },
-          }, 
-          dispute: true, 
+          },
+          dispute: true,
           payment: true,
 
-        } 
+        }
       });
       return transaction;
     } catch (error) {
@@ -266,7 +275,6 @@ export class TransactionService {
 
     // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
 
-    
 
     return { message: 'Funds released to seller.' };
   }
@@ -288,7 +296,7 @@ export class TransactionService {
       const openDisputesCount = await this.db.dispute.count({ where: { userId, status: 'OPEN' } });
       const inProgressDisputesCount = await this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } });
       const disputesCount = openDisputesCount + inProgressDisputesCount;
-      
+
       const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
       const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
       return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate: successRate?.toFixed(2) };
@@ -326,7 +334,7 @@ export class TransactionService {
       const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction?.title}, with transaction code ${transaction?.transCode} has been initiated by ${buyer?.name!} worth GHS ${transaction?.amount!}. Please visit https://escrowgh.com/approve/${transaction?.transCode} to approve or view details`;
       sendSMS(transaction?.sellerMomoNumber!, smsMsg);
 
-      return {status: 'success', message: 'Transaction paid successfully' };
+      return { status: 'success', message: 'Transaction paid successfully' };
     } catch (error) {
       throw new InternalServerErrorException('Failed to update transaction.', error);
     }
@@ -339,7 +347,7 @@ export class TransactionService {
         where: { buyerId: userId },
         take: 10,
         orderBy: {
-          createdAt: 'desc', 
+          createdAt: 'desc',
         },
         include: {
           buyer: {
