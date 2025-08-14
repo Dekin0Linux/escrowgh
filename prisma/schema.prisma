@@ -39,7 +39,7 @@ model Transaction {
   title            String
   amount           Float
   status           TransactionStatus @default(PENDING)
-  buyerId          String
+  buyerId          String?
   sellerId         String? // 
   sellerMomoNumber String? // 
   itemImage        String?
@@ -55,9 +55,10 @@ model Transaction {
   currentRole      String?           @default("BUYER")
   description      String?
   deliveryDate     DateTime?
+  initiateBy       String            @default("BUYER")
 
   // Relations
-  buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  buyer  User?  @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller User? @relation("SellerTransactions", fields: [sellerId], references: [id])
 
   dispute    Dispute?
@@ -122,6 +123,7 @@ model Settlement {
 
 enum TransactionStatus {
   PENDING
+  WAITING_FOR_BUYER_CONFIRMATION
   IN_ESCROW
   COMPLETED
   CANCELED
