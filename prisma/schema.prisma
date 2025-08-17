@@ -44,14 +44,16 @@ model Transaction {
   currentRole      String?           @default("BUYER")
   description      String?
   deliveryDate     DateTime?
-  initiateBy       String            @default("BUYER")
+  initiateBy       String?            @default("BUYER")
 
   // Relations
   buyer  User?  @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller User? @relation("SellerTransactions", fields: [sellerId], references: [id])
 
   dispute    Dispute?
+  commission Commission?
   Settlement Settlement[]
+  payment    Payment?
 }
 
 model Commission {
@@ -78,6 +80,7 @@ model Dispute {
   description   String?
   evidence      String?
   info          String?
+  disputeNo     String
   transaction   Transaction   @relation(fields: [transactionId], references: [id])
   user          User          @relation("UserDisputes", fields: [userId], references: [id])
 }
@@ -136,3 +139,8 @@ enum SettlementType {
   RELEASE_TO_SELLER
   REFUND_TO_BUYER
 }
+
+
+// npx prisma migrate dev --name add_dispute_model
+// npx prisma db push
+// npx prisma generate

@@ -26,7 +26,6 @@ export class TransactionController {
     return this.transactionService.createTransaction(dto, file);
   }
 
-
   // UPDATE TRANSACTION STATUS
   @UseGuards(JwtAuthGuard)
   @Post('/update-status')
@@ -117,6 +116,10 @@ export class TransactionController {
     return this.transactionService.getUserTransactions(userId);
   }
 
-
-
+  // Get transaction statistics
+  @UseGuards(JwtAuthGuard, IsAdminGuard)
+  @Get('/stats')
+  async getTransactionStats() {
+    return this.transactionService.getTransactionStats();
+  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Request, UploadedFile, UseGuards,UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Request, UploadedFile, UseGuards,UseInterceptors } from '@nestjs/common';
 import { DisputeService } from './dispute.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
@@ -30,7 +30,7 @@ export class DisputeController {
 
     // SETTLE DISPUTE
     @UseGuards(JwtAuthGuard, IsAdminGuard)
-    @Post(':id/settle')
+    @Post('settleDispute/:id')
     settleDispute(@Param('id') id: string, @Body('settleToBuyer') settleToBuyer: boolean) {
         return this.disputeService.settleDispute(id, settleToBuyer);
     }
@@ -56,6 +56,13 @@ export class DisputeController {
     @Get('disputeStatusCount/:id')
     async getDisputesStatusCount(@Param('id') id: string) {
         return this.disputeService.getDisputesStatusCountByUserId(id);
+    }
+
+    //update dispute status
+    @UseGuards(JwtAuthGuard,IsAdminGuard)
+    @Put('updateDisputeStatus/:id')
+    async updateDisputeStatus(@Param('id') id: string, @Body('status') status: any) {
+        return this.disputeService.updateDisputeStatus(id, status);
     }
 
 

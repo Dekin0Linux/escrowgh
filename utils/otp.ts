@@ -78,7 +78,4 @@ async function verifyOTP(otpValue, phonenumber) {
 
 
 
-module.exports = {
-    generateOTP,
-    verifyOTP
-}
+export {generateOTP, verifyOTP}

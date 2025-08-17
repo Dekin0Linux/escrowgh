@@ -10,6 +10,37 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 export class TransactionService {
   constructor(private readonly db: DatabaseService, private readonly cloudinaryService: CloudinaryService) { }
 
+  // Get transaction statistics including total, in escrow, completed, and disputed transactions
+  async getTransactionStats() {
+    try {
+      // Get all transactions with necessary fields
+      const transactions = await this.db.transaction.findMany({
+        select: {
+          amount: true,
+          status: true,
+        },
+      });
+
+      // Calculate statistics
+      const totalTransactions = transactions.length;
+      const totalValue = transactions.reduce((sum, t) => sum + t.amount, 0);
+      const inEscrowCount = transactions.filter(t => t.status === 'IN_ESCROW').length;
+      const completedCount = transactions.filter(t => t.status === 'COMPLETED').length;
+      const disputedCount = transactions.filter(t => t.status === 'DISPUTED').length;
+
+      return {
+        totalTransactions,
+        totalValue: parseFloat(totalValue.toFixed(2)),
+        inEscrow: inEscrowCount,
+        completed: completedCount,
+        disputed: disputedCount,
+      };
+    } catch (error) {
+      console.error('[Get Transaction Stats Error]', error);
+      throw new InternalServerErrorException('Failed to get transaction statistics.');
+    }
+  }
+
   async getAllTransactions(paginationDto: { limit?: number; page?: number }) {
     const { limit = 10, page = 1 } = paginationDto;
     const skip = (page - 1) * limit;
@@ -65,6 +96,9 @@ export class TransactionService {
       if (typeof data.payload === 'string') {
         parsedData = JSON.parse(data.payload);
       }
+
+      // finder user by id using the userCode
+
       const newTransaction = await this.db.transaction.create({
         data: {
           ...parsedData,
@@ -360,6 +394,52 @@ export class TransactionService {
     }
   }
 
+  // Get user statistics including transaction counts and amounts
+  async getUserStatistics(userId: string) {
+    try {
+      const user = await this.db.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found.');
+      }
+
+      const transactions = await this.db.transaction.findMany({
+        where: { buyerId: userId },
+      });
+
+      const totalTransactions = transactions.length;
+      const pendingPayments = transactions.filter(t => t.status === 'PENDING').length;
+      
+      const openDisputesCount = await this.db.dispute.count({ 
+        where: { userId, status: 'OPEN' } 
+      });
+      
+      const inProgressDisputesCount = await this.db.dispute.count({ 
+        where: { userId, status: 'INPROGRESS' } 
+      });
+      
+      const disputesCount = openDisputesCount + inProgressDisputesCount;
+      const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
+      
+      const successRate = totalTransactions > 0 
+        ? ((totalTransactions - disputesCount) / totalTransactions) * 100 
+        : 0;
+
+      return { 
+        totalTransactions, 
+        pendingPayments, 
+        disputesCount, 
+        totalAmount, 
+        successRate: parseFloat(successRate.toFixed(2))
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to get user statistics.', error);
+    }
+  }
+
+  // Get all transactions for a specific user
   async getUserTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
@@ -393,6 +473,6 @@ export class TransactionService {
 
 }
 
-// get users transactions
+
 
 

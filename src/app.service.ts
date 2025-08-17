@@ -4,6 +4,6 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class AppService {
   getHello() {
-    return "Welcome to ESCROW GH";
+    return "Welcome to MiBaya";
   }
 }

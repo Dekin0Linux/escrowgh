@@ -3,6 +3,8 @@ import { DisputeStatus } from '@prisma/client';
 import { DatabaseService } from 'src/database/database.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import * as multer from 'multer';
+import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
+
 
 @Injectable()
 export class DisputeService {
@@ -59,7 +61,8 @@ export class DisputeService {
           evidence: imageUrl,
           status: 'OPEN',
           description: payload.description,
-          info: payload.info
+          info: payload.info,
+          disputeNo: generateUserTransCode(),
         },
       });
 
@@ -82,17 +85,20 @@ export class DisputeService {
   @param settleToBuyer: boolean
   */
   async settleDispute(transactionId: string, settleToBuyer: boolean) {
+
+
     try {
       const transaction = await this.db.transaction.findUnique({
         where: { id: transactionId },
         include: { payment: true },
       });
 
+
       if (!transaction || transaction.status !== 'DISPUTED') {
         throw new BadRequestException('Transaction not eligible for settlement.');
       }
 
-      const recipientId = settleToBuyer ? transaction.buyerId : transaction.sellerId;
+      const recipientId = settleToBuyer ? transaction.buyerId : transaction?.sellerId || null;
 
       await this.db.settlement.create({
         data: {
@@ -100,7 +106,7 @@ export class DisputeService {
           amount: transaction.amount,
           releasedTo: recipientId ? recipientId : "UNREGISTERED USER",
           type: settleToBuyer ? 'REFUND_TO_BUYER' : 'RELEASE_TO_SELLER',
-          userId: recipientId ? recipientId : "UNREGISTERED USER",
+          userId: recipientId ? recipientId : null,
         },
       });
 
@@ -117,13 +123,16 @@ export class DisputeService {
         data: {
           status: 'RESOLVED',
           resolvedAt: new Date(),
-          resolution: `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller'}`,
+          resolution: `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller' }`,
         },
       });
 
+      // 
+
       return { message: 'Dispute settled successfully.' };
     } catch (error) {
-      throw new InternalServerErrorException('Failed to settle dispute.', error);
+      throw new InternalServerErrorException('Failed to settle dispute.', error.response);
+
     }
   }
 
@@ -237,6 +246,18 @@ export class DisputeService {
       return { resolved, inProgress, open, rejected };
     } catch (error) {
       throw new InternalServerErrorException('Failed to get disputes status count by user id', error);
+    }
+  }
+
+  async updateDisputeStatus(disputeId: string, status: DisputeStatus) {
+    try {
+      const updatedDispute = await this.db.dispute.update({
+        where: { id: disputeId },
+        data: { status },
+      });
+      return updatedDispute;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update dispute status.', error);
     }
   }
 

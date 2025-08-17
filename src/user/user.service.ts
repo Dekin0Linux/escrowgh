@@ -5,6 +5,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const { comparePassword, hashPassword } = require('../../utils/hashpwd');
 import { JwtService } from '@nestjs/jwt';
 import { sendSMS } from 'utils/sms';
+import {generateOTP, verifyOTP} from 'utils/otp'
 
 
 @Injectable()
@@ -151,6 +152,30 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
   }
+
+  async sendOtp(phone:string){
+    try{
+      const findUser = await this.db.user.findFirst({where:{phone:phone}});
+      generateOTP(phone)
+    }catch(err){
+      throw new BadRequestException('Failed to reset password');
+    }
+  }
+
+  async verifyPwdOtp(data: { phone: string; otp: string }){
+    try{
+      const findUser = await this.db.user.findFirst({where:{phone:data.phone}});
+      if(!findUser){
+        throw new NotFoundException('User not found');
+      }
+      verifyOTP(data.otp, findUser?.phone)
+    }catch(err){
+      throw new BadRequestException('Failed to reset password');
+    }
+  }
+
+
+ 
 
   async resetPassword(data: { phone: string; password: string }){
 
