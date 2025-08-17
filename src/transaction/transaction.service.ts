@@ -274,49 +274,30 @@ export class TransactionService {
     });
 
     // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
-
-
     return { message: 'Funds released to seller.' };
   }
 
-  // get user statistics
-  async getUserStatistics(userId: string) {
+  // Update payment status and create payment record
+  async updateIsPaid(transactionId: string, body: { reference: string; status: string }) {
     try {
-
-      const user = await this.db.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        throw new NotFoundException('User not found.');
-      }
-      const transactions = await this.db.transaction.findMany({
-        where: { buyerId: userId },
+      const transaction = await this.db.transaction.findUnique({ 
+        where: { id: transactionId },
+        include: { buyer: true }
       });
-      const totalTransactions = transactions.length;
-      const pendingPayments = transactions.filter((t) => t.status === 'PENDING').length;
-      // const disputesCount = transactions.filter((t: any) => t.dispute).length;
-      const openDisputesCount = await this.db.dispute.count({ where: { userId, status: 'OPEN' } });
-      const inProgressDisputesCount = await this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } });
-      const disputesCount = openDisputesCount + inProgressDisputesCount;
-
-      const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
-      const successRate = totalTransactions > 0 ? (totalTransactions - disputesCount) / totalTransactions : 0;
-      return { totalTransactions, pendingPayments, disputesCount, totalAmount, successRate: successRate?.toFixed(2) };
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to get user statistics.', error);
-    }
-  }
-
-
-  // update isPaid field and create payment record
-  async updateIsPaid(transactionId: string, body: any) {
-    try {
-      const transaction = await this.db.transaction.findUnique({ where: { id: transactionId } });
+      
       if (!transaction) {
         throw new NotFoundException('Transaction not found.');
       }
+
+      if (!transaction.buyerId) {
+        throw new BadRequestException('Transaction must have a buyer to process payment.');
+      }
+
       await this.db.transaction.update({
         where: { id: transactionId },
         data: { isFunded: true, status: 'IN_ESCROW' },
       });
+
       await this.db.payment.create({
         data: {
           transactionId,
@@ -324,28 +305,31 @@ export class TransactionService {
           amount: transaction.amount,
           paymentMethod: 'MOMO',
           reference: body.reference,
-          status: body.status,
+          status: body.status as any, // Cast to any to satisfy TypeScript
         },
       });
-      // get buyer
-      const buyer = await this.db.user.findUnique({ where: { id: transaction?.buyerId! } });
 
-      // send sms to seller
-      const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction?.title}, with transaction code ${transaction?.transCode} has been initiated by ${buyer?.name!} worth GHS ${transaction?.amount!}. Please visit https://escrowgh.com/approve/${transaction?.transCode} to approve or view details`;
-      sendSMS(transaction?.sellerMomoNumber!, smsMsg);
+      // Send SMS to seller if sellerMomoNumber exists
+      if (transaction.sellerMomoNumber) {
+        const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction.title}, with transaction code ${transaction.transCode} has been initiated by ${transaction.buyer?.name || 'a buyer'} worth GHS ${transaction.amount}. Please visit https://escrowgh.com/approve/${transaction.transCode} to approve or view details`;
+        sendSMS(transaction.sellerMomoNumber, smsMsg);
+      }
 
       return { status: 'success', message: 'Transaction paid successfully' };
     } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to update transaction.', error);
     }
   }
 
-  // GET RECENCENT TRANSACRTIONS of user add buyer and seller info
+  // GET RECENT TRANSACTIONS of user add buyer and seller info
   async getRecentTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
         where: { buyerId: userId },
-        take: 10,
+        take: 5,
         orderBy: {
           createdAt: 'desc',
         },

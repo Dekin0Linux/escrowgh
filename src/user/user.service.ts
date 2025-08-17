@@ -128,7 +128,6 @@ export class UserService {
     return user;
   }
 
-
   async updateUser(id: string, data:any) {
     try {
       await this.db.user.update({
@@ -143,7 +142,6 @@ export class UserService {
       throw new BadRequestException('Failed to update user');
     }
   }
-
 
   async deleteUser(id: string) {
     try {
