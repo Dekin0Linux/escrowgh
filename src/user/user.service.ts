@@ -143,6 +143,7 @@ export class UserService {
       throw new BadRequestException('Failed to update user');
     }
   }
+  
 
   async deleteUser(id: string) {
     try {
@@ -154,15 +155,19 @@ export class UserService {
   }
 
   async sendOtp(phone:string){
+    console.log(phone)
     try{
       const findUser = await this.db.user.findFirst({where:{phone:phone}});
+      if(!findUser){
+        throw new NotFoundException('User not found');
+      }
       generateOTP(phone)
     }catch(err){
       throw new BadRequestException('Failed to reset password');
     }
   }
 
-  async verifyPwdOtp(data: { phone: string; otp: string }){
+  async verifyPwdOtp(data: { phone: string ; otp: string }){
     try{
       const findUser = await this.db.user.findFirst({where:{phone:data.phone}});
       if(!findUser){
@@ -174,9 +179,7 @@ export class UserService {
     }
   }
 
-
  
-
   async resetPassword(data: { phone: string; password: string }){
 
     try {

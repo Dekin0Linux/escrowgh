@@ -97,16 +97,30 @@ export class TransactionService {
         parsedData = JSON.parse(data.payload);
       }
 
-      // finder user by id using the userCode
+      // finder user by id using the userCode or phone
+
+      // const buyer = await this.db.user.findUnique({ where: { userCode: parsedData.userCode } });
+      // const seller = await this.db.user.findUnique({ where: { userCode: parsedData.sellerId } });
+
 
       const newTransaction = await this.db.transaction.create({
         data: {
           ...parsedData,
           transCode,
           itemImage: file ? await this.cloudinaryService.uploadImage(file) : null,
+          // buyerId: parsedData.buyerId,
+          // sellerId: parsedData.sellerId,
         },
       });
 
+      // send transaction invitation to buyer or seller based on the role and phone number
+      // if (buyer?.phone) {
+      //   sendSMS(buyer.phone, `You have a new transaction ${transCode}`);
+      // }
+      // if (seller?.phone) {
+      //   sendSMS(seller.phone, `You have a new transaction ${transCode}`);
+      // }
+      
       return { message: "Transaction created successfully", id: newTransaction.id };
     } catch (error) {
       // Optional: handle known Prisma errors specifically

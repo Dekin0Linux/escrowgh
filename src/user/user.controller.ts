@@ -32,7 +32,7 @@ export class UserController {
         return this.user.loginUser(data);
     }
 
-    @Post('reset-password')
+    @Post('resetPassword')
     resetPassword(@Body(new ValidationPipe) data:ResetPasswordDto){
         return this.user.resetPassword(data);
     }
@@ -63,4 +63,15 @@ export class UserController {
     deleteUser(@Param('id') id:string){
         return this.user.deleteUser(id)
     }
+
+    @Post('sendOtp')
+    sendOtp(@Body(new ValidationPipe) data:{phone:string}){
+        return this.user.sendOtp(data.phone);
+    }
+
+    @Post('verifyOtp')
+    verifyOtp(@Body(new ValidationPipe) data:{phone:string,otp:string}){
+        return this.user.verifyPwdOtp(data);
+    }
+
 }
