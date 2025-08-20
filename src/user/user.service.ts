@@ -6,6 +6,9 @@ const { comparePassword, hashPassword } = require('../../utils/hashpwd');
 import { JwtService } from '@nestjs/jwt';
 import { sendSMS } from 'utils/sms';
 import {generateOTP, verifyOTP} from 'utils/otp'
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
 
 
 @Injectable()
@@ -25,7 +28,17 @@ export class UserService {
     return this.jwtService.sign(payload);
   }
 
+  // get user statiics totalusers, active users , admin users
+  @UseGuards(JwtAuthGuard, IsAdminGuard)
+  async getUserStatistics() {
+    const totalUsers = await this.db.user.count();
+    const activeUsers = 0 // await this.db.user.count({ where: { isBlocked: false } });
+    const adminUsers = await this.db.user.count({ where: { isAdmin: true } });
+    return { totalUsers, activeUsers, adminUsers };
+  }
+
   // GET ALL USERS
+  @UseGuards(JwtAuthGuard, IsAdminGuard)
   async getAllUsers() {
     const users = await this.db.user.findMany();
     return users.map(({ password, ...rest }) => rest); //exclude pwd
@@ -103,6 +116,7 @@ export class UserService {
   }
 
   // GET USER BY USERCODE
+  @UseGuards(JwtAuthGuard)
   async getUserByUserCode(userCode: string) {
     try {
       const user = await this.db.user.findUnique({ where: { userCode } });
@@ -115,7 +129,8 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
   }
-
+ 
+  @UseGuards(JwtAuthGuard)
   async getUserById(id: string) {
     const user = await this.db.user.findUnique({ where: { id },select: {
         id: true,
@@ -129,6 +144,7 @@ export class UserService {
     return user;
   }
 
+  @UseGuards(JwtAuthGuard)
   async updateUser(id: string, data:any) {
     try {
       await this.db.user.update({
@@ -145,6 +161,7 @@ export class UserService {
   }
   
 
+  @UseGuards(JwtAuthGuard,IsAdminGuard)
   async deleteUser(id: string) {
     try {
       await this.db.user.delete({ where: { id } });

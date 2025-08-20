@@ -17,6 +17,14 @@ model User {
   createdAt          DateTime      @default(now())
   userCode           String?       @unique
   updatedAt          DateTime      @default(now())
+  userIp             String?
+  userLocation       String?
+  isVerified         Boolean       @default(true)
+  isBlocked          Boolean       @default(false)
+  lastLoggedIn       DateTime?
+  dateRegistered     DateTime      @default(now())
+  role               String        @default("user")
+
   disputes           Dispute[]     @relation("UserDisputes")
   payments           Payment[]
   Settlement         Settlement[]

@@ -4,6 +4,7 @@ import { DatabaseService } from 'src/database/database.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import * as multer from 'multer';
 import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
+import { sendSMS } from 'utils/sms';
 
 
 @Injectable()
@@ -66,6 +67,8 @@ export class DisputeService {
         },
       });
 
+      // send sms to seller and buyer
+
       return { message: "Dispute created successfully" };
 
     } catch (error) {
@@ -94,12 +97,14 @@ export class DisputeService {
       });
 
 
-      if (!transaction || transaction.status !== 'DISPUTED') {
+      if (!transaction || transaction.status !== 'DISPUTED' || transaction.isFunded != true) {
         throw new BadRequestException('Transaction not eligible for settlement.');
       }
 
+      // get the recipient id 
       const recipientId = settleToBuyer ? transaction.buyerId : transaction?.sellerId || null;
 
+      // create a settlement record
       await this.db.settlement.create({
         data: {
           transactionId,
@@ -110,14 +115,16 @@ export class DisputeService {
         },
       });
 
+      // update the transaction status to completed
       await this.db.transaction.update({
-        where: { id: transactionId },
+        where: { id: transactionId,isFunded: true },
         data: {
           status: 'COMPLETED',
           releaseDate: new Date(),
         },
       });
 
+      // update the dispute status to resolved
       await this.db.dispute.updateMany({
         where: { transactionId },
         data: {
@@ -127,12 +134,27 @@ export class DisputeService {
         },
       });
 
-      // 
+      // send money to buyer or seller
+      if (settleToBuyer) {
+        // send money to buyer
+        // send SMS to buyer
+        const buyer = await this.db.user.findUnique({ where: { id : transaction?.buyerId || 'undefined'} });
+        if (buyer?.phone) {
+          sendSMS(buyer.phone, `An amount of ${transaction.amount} has been settled to you for ${transaction.title} with transaction code ${transaction.transCode} `);
+        }
+      } else {
+        // send money to seller
+        // send SMS to seller
+        const seller = transaction?.sellerMomoNumber;
+        if (seller) {
+          sendSMS(seller, `You have a new transaction ${transaction.transCode}`);
+        }
+      }
 
       return { message: 'Dispute settled successfully.' };
     } catch (error) {
-      throw new InternalServerErrorException('Failed to settle dispute.', error.response);
-
+      console.log(error)
+      throw new InternalServerErrorException(error.message);
     }
   }
 
