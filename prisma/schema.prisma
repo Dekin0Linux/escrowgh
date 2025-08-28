@@ -17,14 +17,13 @@ model User {
   createdAt          DateTime      @default(now())
   userCode           String?       @unique
   updatedAt          DateTime      @default(now())
+  dateRegistered     DateTime      @default(now())
+  isBlocked          Boolean       @default(false)
+  isVerified         Boolean       @default(true)
+  lastLoggedIn       DateTime?
+  role               String        @default("user")
   userIp             String?
   userLocation       String?
-  isVerified         Boolean       @default(true)
-  isBlocked          Boolean       @default(false)
-  lastLoggedIn       DateTime?
-  dateRegistered     DateTime      @default(now())
-  role               String        @default("user")
-
   disputes           Dispute[]     @relation("UserDisputes")
   payments           Payment[]
   Settlement         Settlement[]
@@ -39,8 +38,8 @@ model Transaction {
   amount           Float
   status           TransactionStatus @default(PENDING)
   buyerId          String?
-  sellerId         String? // 
-  sellerMomoNumber String? // 
+  sellerId         String?
+  sellerMomoNumber String?
   itemImage        String?
   deliveryNumber   String?
   createdAt        DateTime          @default(now())
@@ -52,16 +51,13 @@ model Transaction {
   currentRole      String?           @default("BUYER")
   description      String?
   deliveryDate     DateTime?
-  initiateBy       String?            @default("BUYER")
-
-  // Relations
-  buyer  User?  @relation("BuyerTransactions", fields: [buyerId], references: [id])
-  seller User? @relation("SellerTransactions", fields: [sellerId], references: [id])
-
-  dispute    Dispute?
-  commission Commission?
-  Settlement Settlement[]
-  payment    Payment?
+  initiateBy       String?           @default("BUYER")
+  commission       Commission?
+  dispute          Dispute?
+  payment          Payment?
+  Settlement       Settlement[]
+  buyer            User?             @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller           User?             @relation("SellerTransactions", fields: [sellerId], references: [id])
 }
 
 model Commission {
@@ -121,11 +117,11 @@ model Settlement {
 
 enum TransactionStatus {
   PENDING
-  WAITING_FOR_BUYER_CONFIRMATION
   IN_ESCROW
   COMPLETED
   CANCELED
   DISPUTED
+  WAITING_FOR_BUYER_CONFIRMATION
 }
 
 enum DisputeStatus {
@@ -147,8 +143,3 @@ enum SettlementType {
   RELEASE_TO_SELLER
   REFUND_TO_BUYER
 }
-
-
-// npx prisma migrate dev --name add_dispute_model
-// npx prisma db push
-// npx prisma generate
