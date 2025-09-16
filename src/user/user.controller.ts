@@ -74,4 +74,10 @@ export class UserController {
         return this.user.verifyPwdOtp(data);
     }
 
+    @Post('save-token')
+    async saveToken(@Body() body: { userId: string; token: string }) {
+        await this.user.updatePushToken(body.userId, body.token);
+        return { success: true };
+    }
+
 }

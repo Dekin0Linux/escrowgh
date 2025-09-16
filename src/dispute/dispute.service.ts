@@ -47,13 +47,15 @@ export class DisputeService {
         throw new BadRequestException('Unauthorized to raise dispute.');
       }
 
-      await this.db.transaction.update({
+      // UPDATING TRANSACTION STATUS
+      const tx = await this.db.transaction.update({
         where: { id: payload.transactionId },
         data: { status: 'DISPUTED' },
       });
 
       const imageUrl = file ? await this.cloudinaryService.uploadImage(file) : null;
 
+      // CREATING DISPUTE
       await this.db.dispute.create({
         data: {
           transactionId: payload.transactionId,
@@ -64,6 +66,9 @@ export class DisputeService {
           description: payload.description,
           info: payload.info,
           disputeNo: generateUserTransCode(),
+          //@ts-ignore
+          buyerId : tx?.buyerId,
+          sellerId : tx?.sellerId
         },
       });
 
@@ -88,8 +93,6 @@ export class DisputeService {
   @param settleToBuyer: boolean
   */
   async settleDispute(transactionId: string, settleToBuyer: boolean) {
-
-
     try {
       const transaction = await this.db.transaction.findUnique({
         where: { id: transactionId },
@@ -124,6 +127,7 @@ export class DisputeService {
         },
       });
 
+      
       // update the dispute status to resolved
       await this.db.dispute.updateMany({
         where: { transactionId },
@@ -231,7 +235,8 @@ export class DisputeService {
   async getDisputesByUserId(userId: string) {
     try {
       const disputes = await this.db.dispute.findMany({
-        where: { userId },
+        // or buyer
+        where: { OR : [{buyerId :userId},{sellerId : userId}] },
         include: {
           user: {
             select: {

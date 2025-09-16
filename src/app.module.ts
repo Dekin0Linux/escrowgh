@@ -11,6 +11,8 @@ import { AuthModule } from './auth/auth.module';
 import { CommisionsModule } from './commisions/commisions.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { CloudinaryService } from './cloudinary/cloudinary.service';
+import { NotificationService } from './notification/notification.service';
+import { NotificationController } from './notification/notification.controller';
 
 @Module({
   imports: [
@@ -26,7 +28,7 @@ import { CloudinaryService } from './cloudinary/cloudinary.service';
     CommisionsModule,
     SettlementModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, CloudinaryService],
+  controllers: [AppController, NotificationController],
+  providers: [AppService, CloudinaryService, NotificationService],
 })
 export class AppModule {}
