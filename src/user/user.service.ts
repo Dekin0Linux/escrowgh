@@ -17,6 +17,7 @@ export class UserService {
     private readonly jwtService: JwtService
   ) {}
 
+  
   private generateToken(user: any) {
     const payload = {
       sub: user.id,
@@ -43,7 +44,6 @@ export class UserService {
     const users = await this.db.user.findMany();
     return users.map(({ password, ...rest }) => rest); //exclude pwd
   }
-
 
   // CREATE USER
   async createUser(data: any) {

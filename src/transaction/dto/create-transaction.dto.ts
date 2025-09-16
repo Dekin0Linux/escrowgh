@@ -33,4 +33,7 @@ export class CreateTransactionDto {
     @IsNumber()
     commissionFee?: number;
 
+    @IsNotEmpty()
+    initiatorRole:string
+
 }
