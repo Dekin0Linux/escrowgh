@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Request, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Request, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
@@ -122,4 +122,16 @@ export class TransactionController {
   async getTransactionStats() {
     return this.transactionService.getTransactionStats();
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/acceptTransaction')
+  async acceptTransaction(@Param('id') transactionId: string, @Request() req: any) {
+    // assume you set req.user.id in your AuthGuard
+    const userId = req.user.userId;
+    const result = await this.transactionService.acceptTransaction(userId, transactionId);
+    return result;
+  }
+
+
+
 }

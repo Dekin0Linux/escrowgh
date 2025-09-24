@@ -24,11 +24,16 @@ model User {
   role               String        @default("user")
   userIp             String?
   userLocation       String?
+  loginAttempts      Float?
+
+
   disputes           Dispute[]     @relation("UserDisputes")
   payments           Payment[]
   Settlement         Settlement[]
   buyerTransactions  Transaction[] @relation("BuyerTransactions")
   sellerTransactions Transaction[] @relation("SellerTransactions")
+  notificationTokens NotificationTokens[]
+
 }
 
 model Transaction {
@@ -37,21 +42,32 @@ model Transaction {
   title            String
   amount           Float
   status           TransactionStatus @default(PENDING)
+
+  // PARTIES
   buyerId          String?
   sellerId         String?
   sellerMomoNumber String?
+  counterpartyPhone String?
+  currentRole      String?           @default("BUYER")
+  initiateBy       String?           @default("BUYER")
+
+  // acceptance flow
+  initiatorAccepted Boolean          @default(true)  // creator automatically accepts
+  counterpartyAccepted Boolean       @default(false) // must accept before payment
+
+  // escrow details
   itemImage        String?
   deliveryNumber   String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   releaseDate      DateTime?
   commissionFee    Float?
-  currency         String            @default("GHS")
   isFunded         Boolean           @default(false)
-  currentRole      String?           @default("BUYER")
+  currency         String            @default("GHS")
   description      String?
   deliveryDate     DateTime?
-  initiateBy       String?           @default("BUYER")
+  
+  // RELATIONS
   commission       Commission?
   dispute          Dispute?
   payment          Payment?
@@ -115,8 +131,17 @@ model Settlement {
   User          User?          @relation(fields: [userId], references: [id])
 }
 
+model NotificationTokens {
+  id          String      @id @default(uuid())
+  userId      String
+  expoToken   String
+
+  user        User       @relation(fields: [userId], references: [id])
+}
+
 enum TransactionStatus {
   PENDING
+  ACCEPTED
   IN_ESCROW
   COMPLETED
   CANCELED
@@ -143,3 +168,9 @@ enum SettlementType {
   RELEASE_TO_SELLER
   REFUND_TO_BUYER
 }
+
+
+// npx prisma migrate dev --name add_user_ip_location
+// npx prisma migrate deploy
+// npx prisma db push
+

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
@@ -93,35 +93,68 @@ export class TransactionService {
 
     try {
       let parsedData = data;
-      if (typeof data.payload === 'string') {
-        parsedData = JSON.parse(data.payload);
+      if (typeof data.payload === 'string') { parsedData = JSON.parse(data.payload); }
+
+      const initiatorRole = parsedData.initiateBy
+
+      // find initiator user
+      const initiatorUser = await this.db.user.findUnique({ where: { id: parsedData.initiatorId } });
+      if (!initiatorUser) throw new BadRequestException('Initiator user not found');
+
+
+      // find counterparty by code or phone if provided
+      let counterpartyUser: any = null;
+      if (parsedData.counterpartyCode) {
+        counterpartyUser = await this.db.user.findUnique({ where: { userCode: parsedData.counterpartyCode } });
+      } else if (parsedData.counterpartyPhone) {
+        counterpartyUser = await this.db.user.findUnique({ where: { phone: parsedData.counterpartyPhone } });
       }
 
-      // finder user by id using the userCode or phone
 
-      // const buyer = await this.db.user.findUnique({ where: { userCode: parsedData.userCode } });
-      // const seller = await this.db.user.findUnique({ where: { userCode: parsedData.sellerId } });
+      // map buyer/seller ids based on initiatorRole
+      const buyerId = initiatorRole === 'Buyer' ? initiatorUser.id : counterpartyUser?.id;
+      const sellerId = initiatorRole === 'Seller' ? initiatorUser.id : counterpartyUser?.id;
 
+       // initiator cannot be same as seller
+      if(buyerId  ==  sellerId) {
+        throw new BadRequestException('Invalid counterparty');
+      }
 
-      const newTransaction = await this.db.transaction.create({
+      // IMAGE UPLOAD
+      const itemImage = file ? await this.cloudinaryService.uploadImage(file) : null;
+
+      const newTx = await this.db.transaction.create({
         data: {
-          ...parsedData,
           transCode,
-          itemImage: file ? await this.cloudinaryService.uploadImage(file) : null,
-          // buyerId: parsedData.buyerId,
-          // sellerId: parsedData.sellerId,
+          title: parsedData.title,
+          amount: parsedData.amount,
+          currency: parsedData.currency ?? 'GHS',
+          initiateBy: initiatorRole,
+          buyerId,
+          currentRole : initiatorRole,
+          sellerId,
+          sellerMomoNumber: parsedData.sellerMomoNumber,
+          description: parsedData.description,
+          itemImage,
+          counterpartyPhone: counterpartyUser ? counterpartyUser.phone : parsedData.counterpartyPhone,
+          initiatorAccepted: true,
+          counterpartyAccepted: false,
+          status: 'PENDING',
+          commissionFee : parsedData.commissionFee
         },
       });
 
-      // send transaction invitation to buyer or seller based on the role and phone number
-      // if (buyer?.phone) {
-      //   sendSMS(buyer.phone, `You have a new transaction ${transCode}`);
-      // }
-      // if (seller?.phone) {
-      //   sendSMS(seller.phone, `You have a new transaction ${transCode}`);
-      // }
-      
-      return { message: "Transaction created successfully", id: newTransaction.id };
+      // notify counterparty if exists
+      if (counterpartyUser?.phone) {
+        // SEND SMS TO COUNTERPART PARTIES
+        // await this.notificationService.sendSMS(
+        //   counterpartyUser.phone,
+        //   `You have a new escrow transaction (${newTx.transCode}). Please log in to accept.`
+        // );
+      }
+
+      // RETURN TRANSACTION 
+      return { message: "Transaction created successfully", id: newTx.id };
     } catch (error) {
       // Optional: handle known Prisma errors specifically
       if (error.code === 'P2002') {
@@ -142,6 +175,47 @@ export class TransactionService {
       throw new InternalServerErrorException('Failed to get transaction status.', error);
     }
   }
+  
+
+  // ACCEPT TRANSACTION
+  async acceptTransaction(userId: string, transactionId: string) {
+    const tx = await this.db.transaction.findUnique({ where: { id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
+
+    if(tx.counterpartyAccepted) {
+      throw new ForbiddenException('Counterpart accepted already');
+    }
+
+
+    // check that user is counterparty
+    if (tx.initiateBy === 'BUYER' && tx.sellerId !== userId) {
+      throw new ForbiddenException('You are not the counterparty');
+    }
+    if (tx.initiateBy === 'SELLER' && tx.buyerId !== userId) {
+      throw new ForbiddenException('You are not the counterparty');
+    }
+
+    const updated = await this.db.transaction.update({
+      where: { id: transactionId },
+      data: {
+        counterpartyAccepted: true,
+        status: 'ACCEPTED'
+      }
+    });
+
+    // SEND ACCEPTANCE SMS
+
+    return { message: 'Transaction accepted', id: updated.id };
+  }
+
+  // Step 1: Initiator creates transaction. Status = PENDING, initiatorAccepted = true, counterpartyAccepted = false.
+
+  // Step 2: Counterparty logs in and “accepts.” Status = ACCEPTED.
+
+  // Step 3: Buyer pays. Status = FUNDED, isFunded = true.
+
+  // Step 4: Seller delivers, buyer releases. Status = COMPLETED.
+
 
 
   // update transaction info
@@ -328,17 +402,22 @@ export class TransactionService {
   // Update payment status and create payment record
   async updateIsPaid(transactionId: string, body: { reference: string; status: string }) {
     try {
-      const transaction = await this.db.transaction.findUnique({ 
+      const transaction = await this.db.transaction.findUnique({
         where: { id: transactionId },
         include: { buyer: true }
       });
-      
+
       if (!transaction) {
         throw new NotFoundException('Transaction not found.');
       }
 
       if (!transaction.buyerId) {
         throw new BadRequestException('Transaction must have a buyer to process payment.');
+      }
+
+      // if conterpart is false reject 
+      if (!transaction.counterpartyAccepted) {
+        throw new BadRequestException('Your counterpart has not accepted this transaction yet.');
       }
 
       await this.db.transaction.update({
@@ -376,7 +455,10 @@ export class TransactionService {
   async getRecentTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
-        where: { buyerId: userId },
+        where: { OR : [
+          {buyerId :userId},
+          {sellerId : userId}
+        ] },
         take: 5,
         orderBy: {
           createdAt: 'desc',
@@ -422,27 +504,28 @@ export class TransactionService {
 
       const totalTransactions = transactions.length;
       const pendingPayments = transactions.filter(t => t.status === 'PENDING').length;
-      
-      const openDisputesCount = await this.db.dispute.count({ 
-        where: { userId, status: 'OPEN' } 
+      const totalValue =  transactions.filter(t => t.status === 'COMPLETED')
+
+      const openDisputesCount = await this.db.dispute.count({
+        where: { userId, status: 'OPEN' }
       });
-      
-      const inProgressDisputesCount = await this.db.dispute.count({ 
-        where: { userId, status: 'INPROGRESS' } 
+
+      const inProgressDisputesCount = await this.db.dispute.count({
+        where: { userId, status: 'INPROGRESS' }
       });
-      
+
       const disputesCount = openDisputesCount + inProgressDisputesCount;
-      const totalAmount = transactions.reduce((acc, t) => acc + t.amount, 0);
-      
-      const successRate = totalTransactions > 0 
-        ? ((totalTransactions - disputesCount) / totalTransactions) * 100 
+      const totalAmount = totalValue.reduce((acc, t) => acc + t.amount, 0);
+
+      const successRate = totalTransactions > 0
+        ? ((totalTransactions - disputesCount) / totalTransactions) * 100
         : 0;
 
-      return { 
-        totalTransactions, 
-        pendingPayments, 
-        disputesCount, 
-        totalAmount, 
+      return {
+        totalTransactions,
+        pendingPayments,
+        disputesCount,
+        totalAmount,
         successRate: parseFloat(successRate.toFixed(2))
       };
     } catch (error) {
@@ -457,7 +540,13 @@ export class TransactionService {
   async getUserTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
-        where: { buyerId: userId },
+        where: { OR : [
+          {buyerId :userId},
+          {sellerId : userId}
+        ] },
+        orderBy: {
+          createdAt: 'desc',
+        },
         include: {
           buyer: {
             select: {
