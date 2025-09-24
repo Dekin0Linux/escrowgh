@@ -26,13 +26,16 @@ jobs:
           
             echo "📦 Installing dependencies..."
             npm install
+
+            echo "generate prism"
+            npx prisma generate
           
             echo "🔨 Building NestJS project..."
             npm run build
           
             echo "🚀 Restarting NestJS app with PM2..."
             if pm2 list | grep -q escrowapi; then
-              pm2 restart ecosystem.config.js --only escrowapi --update-env
+              pm2 start dist/src/main.js --name escrowapi
             else
               pm2 start ecosystem.config.js --only escrowapi
             fi
