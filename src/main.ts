@@ -14,6 +14,7 @@ async function bootstrap() {
     .setDescription('The escrow API description')
     .setVersion('1.0')
     .addTag('escrow')
+    .addBearerAuth()
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, documentFactory);

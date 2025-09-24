@@ -3,7 +3,9 @@ import { DisputeService } from './dispute.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiBearerAuth() 
 @Controller('dispute')
 export class DisputeController {
     constructor(private readonly disputeService: DisputeService) { }

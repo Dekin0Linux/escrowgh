@@ -216,6 +216,15 @@ export class UserService {
     }
   }
 
+  
+  async updatePushToken(userId: string, token: string) {
+    // update or create the push token for the user
+    return await this.db.user.update({
+      where: { id: userId },
+      data: {expoToken : token},
+    });
+  }
+
 
   
 }
