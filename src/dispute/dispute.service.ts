@@ -20,6 +20,9 @@ export class DisputeService {
         include: {
           user: true,
           transaction: true,
+          buyer : {select : {id:true,name:true,email:true,phone:true,expoToken:true}},
+          seller : {select: {id:true,name:true,email:true,phone:true,expoToken:true}}
+        
         },
         orderBy: { createdAt: 'desc' },
       });

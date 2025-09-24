@@ -13,12 +13,17 @@ import { SettlementModule } from './settlement/settlement.module';
 import { CloudinaryService } from './cloudinary/cloudinary.service';
 import { NotificationService } from './notification/notification.service';
 import { NotificationController } from './notification/notification.controller';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // 👈 makes env vars available app-wide
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60,          // time-to-live in seconds
+      limit: 10,        // max requests per ttl
+    }]),
     TransactionModule,
     PaymentModule,
     UserModule,
