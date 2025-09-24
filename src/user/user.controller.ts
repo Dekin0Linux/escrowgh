@@ -8,6 +8,9 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdmin } from 'src/common/decorators/is-admin.decorator';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import { SaveTokenDto } from './dto/save-token.dto';
+import { Throttle } from '@nestjs/throttler';
 
 
 
@@ -18,6 +21,7 @@ export class UserController {
 
     @UseGuards(JwtAuthGuard, IsAdminGuard)
     @Get()
+    @ApiBearerAuth() 
     getUsers(){
         return this.user.getAllUsers();
     }
@@ -39,6 +43,7 @@ export class UserController {
 
     @UseGuards(JwtAuthGuard, IsAdminGuard)
     @Get(':userCode')
+    @ApiBearerAuth()
     getUserByUserCode(@Param('userCode') userCode:string){
         return this.user.getUserByUserCode(userCode);
     }
@@ -46,6 +51,7 @@ export class UserController {
 
     @UseGuards(JwtAuthGuard)
     @Get(':id')
+    @ApiBearerAuth()
     getUserById(@Param('id') id:string) : any{
         return this.user.getUserById(id);
     }
@@ -53,6 +59,7 @@ export class UserController {
 
     @UseGuards(JwtAuthGuard)
     @Put(':id')
+    @ApiBearerAuth()
     updateUser(@Param('id') id:string , @Body() data:any){
         return this.user.updateUser(id,data)
     }
@@ -60,6 +67,7 @@ export class UserController {
 
     @UseGuards(JwtAuthGuard, IsAdminGuard)
     @Delete(':id')
+    @ApiBearerAuth()
     deleteUser(@Param('id') id:string){
         return this.user.deleteUser(id)
     }
@@ -72,6 +80,12 @@ export class UserController {
     @Post('verifyOtp')
     verifyOtp(@Body(new ValidationPipe) data:{phone:string,otp:string}){
         return this.user.verifyPwdOtp(data);
+    }
+
+    @Post('save-token')
+    async saveToken(@Body() body: SaveTokenDto) {
+        await this.user.updatePushToken(body.userId, body.token);
+        return { success: true };
     }
 
 }

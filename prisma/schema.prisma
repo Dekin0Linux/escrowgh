@@ -8,72 +8,74 @@ datasource db {
 }
 
 model User {
-  id                 String        @id @default(uuid())
-  name               String
-  email              String        @unique
-  password           String
-  phone              String?       @unique
-  isAdmin            Boolean       @default(false)
-  createdAt          DateTime      @default(now())
-  userCode           String?       @unique
-  updatedAt          DateTime      @default(now())
-  dateRegistered     DateTime      @default(now())
-  isBlocked          Boolean       @default(false)
-  isVerified         Boolean       @default(true)
-  lastLoggedIn       DateTime?
-  role               String        @default("user")
-  userIp             String?
-  userLocation       String?
-  loginAttempts      Float?
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  password       String
+  phone          String?   @unique
+  isAdmin        Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  userCode       String?   @unique
+  updatedAt      DateTime  @default(now())
+  dateRegistered DateTime  @default(now())
+  isBlocked      Boolean   @default(false)
+  isVerified     Boolean   @default(true)
+  lastLoggedIn   DateTime?
+  role           String    @default("user")
+  userIp         String?
+  userLocation   String?
+  loginAttempts  Float?
+  expoToken      String?
 
-
-  disputes           Dispute[]     @relation("UserDisputes")
+  disputes           Dispute[]            @relation("UserDisputes")
   payments           Payment[]
   Settlement         Settlement[]
-  buyerTransactions  Transaction[] @relation("BuyerTransactions")
-  sellerTransactions Transaction[] @relation("SellerTransactions")
+  buyerTransactions  Transaction[]        @relation("BuyerTransactions")
+  sellerTransactions Transaction[]        @relation("SellerTransactions")
   notificationTokens NotificationTokens[]
 
+  disputesAsBuyer  Dispute[] @relation("BuyerDisputes")
+  disputesAsSeller Dispute[] @relation("SellerDisputes")
 }
 
 model Transaction {
-  id               String            @id @unique @default(uuid())
-  transCode        String            @unique
-  title            String
-  amount           Float
-  status           TransactionStatus @default(PENDING)
+  id        String            @id @unique @default(uuid())
+  transCode String            @unique
+  title     String
+  amount    Float
+  status    TransactionStatus @default(PENDING)
 
   // PARTIES
-  buyerId          String?
-  sellerId         String?
-  sellerMomoNumber String?
+  buyerId           String?
+  sellerId          String?
+  sellerMomoNumber  String?
   counterpartyPhone String?
-  currentRole      String?           @default("BUYER")
-  initiateBy       String?           @default("BUYER")
+  currentRole       String? @default("BUYER")
+  initiateBy        String? @default("BUYER")
 
   // acceptance flow
-  initiatorAccepted Boolean          @default(true)  // creator automatically accepts
-  counterpartyAccepted Boolean       @default(false) // must accept before payment
+  initiatorAccepted    Boolean @default(true) // creator automatically accepts
+  counterpartyAccepted Boolean @default(false) // must accept before payment
 
   // escrow details
-  itemImage        String?
-  deliveryNumber   String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  releaseDate      DateTime?
-  commissionFee    Float?
-  isFunded         Boolean           @default(false)
-  currency         String            @default("GHS")
-  description      String?
-  deliveryDate     DateTime?
-  
+  itemImage      String?
+  deliveryNumber String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  releaseDate    DateTime?
+  commissionFee  Float?
+  isFunded       Boolean   @default(false)
+  currency       String    @default("GHS")
+  description    String?
+  deliveryDate   DateTime?
+
   // RELATIONS
-  commission       Commission?
-  dispute          Dispute?
-  payment          Payment?
-  Settlement       Settlement[]
-  buyer            User?             @relation("BuyerTransactions", fields: [buyerId], references: [id])
-  seller           User?             @relation("SellerTransactions", fields: [sellerId], references: [id])
+  commission Commission?
+  dispute    Dispute?
+  payment    Payment?
+  Settlement Settlement[]
+  buyer      User?        @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller     User?        @relation("SellerTransactions", fields: [sellerId], references: [id])
 }
 
 model Commission {
@@ -101,8 +103,15 @@ model Dispute {
   evidence      String?
   info          String?
   disputeNo     String?
-  transaction   Transaction   @relation(fields: [transactionId], references: [id])
-  user          User          @relation("UserDisputes", fields: [userId], references: [id])
+
+  // PARTIES
+  buyerId  String?
+  sellerId String?
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  user        User        @relation("UserDisputes", fields: [userId], references: [id])
+  buyer       User?       @relation("BuyerDisputes", fields: [buyerId], references: [id])
+  seller      User?       @relation("SellerDisputes", fields: [sellerId], references: [id])
 }
 
 model Payment {
@@ -132,11 +141,11 @@ model Settlement {
 }
 
 model NotificationTokens {
-  id          String      @id @default(uuid())
-  userId      String
-  expoToken   String
+  id        String @id @default(uuid())
+  userId    String
+  expoToken String
 
-  user        User       @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 enum TransactionStatus {
@@ -169,8 +178,7 @@ enum SettlementType {
   REFUND_TO_BUYER
 }
 
-
 // npx prisma migrate dev --name add_user_ip_location
 // npx prisma migrate deploy
+// npx prisma generate
 // npx prisma db push
-

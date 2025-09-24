@@ -435,7 +435,7 @@ export class TransactionService {
           status: body.status as any, // Cast to any to satisfy TypeScript
         },
       });
-
+      
       // Send SMS to seller if sellerMomoNumber exists
       if (transaction.sellerMomoNumber) {
         const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction.title}, with transaction code ${transaction.transCode} has been initiated by ${transaction.buyer?.name || 'a buyer'} worth GHS ${transaction.amount}. Please visit https://escrowgh.com/approve/${transaction.transCode} to approve or view details`;
@@ -451,6 +451,7 @@ export class TransactionService {
     }
   }
 
+  
   // GET RECENT TRANSACTIONS of user add buyer and seller info
   async getRecentTransactions(userId: string) {
     try {

@@ -3,7 +3,9 @@ import { SettlementService } from './settlement.service';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
 import { UseGuards } from '@nestjs/common';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiBearerAuth() 
 @Controller('settlement')
 export class SettlementController {
     constructor(private readonly settlementService: SettlementService) {}
