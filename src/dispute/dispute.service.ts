@@ -5,13 +5,15 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import * as multer from 'multer';
 import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
 import { sendSMS } from 'utils/sms';
-
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class DisputeService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly cloudinaryService: CloudinaryService) { }
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly notificationService: NotificationService,
+    ) { }
 
   // get all disputes
   async getAllDisputes() {
@@ -59,7 +61,7 @@ export class DisputeService {
       const imageUrl = file ? await this.cloudinaryService.uploadImage(file) : null;
 
       // CREATING DISPUTE
-      await this.db.dispute.create({
+      const newDispute: any = await this.db.dispute.create({
         data: {
           transactionId: payload.transactionId,
           userId,
@@ -71,11 +73,24 @@ export class DisputeService {
           disputeNo: generateUserTransCode(),
           //@ts-ignore
           buyerId : tx?.buyerId,
-          sellerId : tx?.sellerId
+          sellerId : tx?.sellerId,
+          
         },
       });
 
       // send sms to seller and buyer
+      // send push notification to seller and buyer
+      await this.notificationService.sendPushNotification(
+        newDispute?.buyer?.expoToken,
+        `New Dispute`,
+        `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+      );
+
+      await this.notificationService.sendPushNotification(
+        newDispute?.seller?.expoToken,
+        `New Dispute`,
+        `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+      );
 
       return { message: "Dispute created successfully" };
 
@@ -95,7 +110,7 @@ export class DisputeService {
   @param transactionId: string
   @param settleToBuyer: boolean
   */
-  async settleDispute(transactionId: string, settleToBuyer: boolean) {
+  async settleDispute(transactionId: string, settleToBuyer: boolean,resolution: string,resolvedBy : string) {
     try {
       const transaction = await this.db.transaction.findUnique({
         where: { id: transactionId },
@@ -103,8 +118,12 @@ export class DisputeService {
       });
 
 
-      if (!transaction || transaction.status !== 'DISPUTED' || transaction.isFunded != true) {
-        throw new BadRequestException('Transaction not eligible for settlement.');
+      if (!transaction) {
+        throw new BadRequestException('Transaction not found.');
+      }
+      
+      if (transaction.status !== 'DISPUTED' || transaction.isFunded !== true) {
+        throw new BadRequestException('Transaction is not in dispute or is not funded');
       }
 
       // get the recipient id 
@@ -130,14 +149,14 @@ export class DisputeService {
         },
       });
 
-      
       // update the dispute status to resolved
-      await this.db.dispute.updateMany({
+      await this.db.dispute.update({
         where: { transactionId },
         data: {
           status: 'RESOLVED',
           resolvedAt: new Date(),
-          resolution: `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller' }`,
+          resolution:  resolution || `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller' }`,
+          resolvedBy,
         },
       });
 
@@ -160,7 +179,6 @@ export class DisputeService {
 
       return { message: 'Dispute settled successfully.' };
     } catch (error) {
-      console.log(error)
       throw new InternalServerErrorException(error.message);
     }
   }

@@ -5,10 +5,11 @@ import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust
 import { sendSMS } from '../../utils/sms';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly db: DatabaseService, private readonly cloudinaryService: CloudinaryService) { }
+  constructor(private readonly db: DatabaseService, private readonly cloudinaryService: CloudinaryService, private readonly notificationService: NotificationService) { }
 
   // Get transaction statistics including total, in escrow, completed, and disputed transactions
   async getTransactionStats() {
@@ -41,15 +42,26 @@ export class TransactionService {
     }
   }
 
-  async getAllTransactions(paginationDto: { limit?: number; page?: number }) {
-    const { limit = 10, page = 1 } = paginationDto;
+  async getAllTransactions(paginationDto: { limit?: number; page?: number, search?: string | undefined }) {
+    const { limit = 10, page = 1, search = undefined } = paginationDto;
     const skip = (page - 1) * limit;
 
     const [transactions, total] = await Promise.all([
       this.db.transaction.findMany({
         skip,
-        take: limit,
+        take: Number(limit),
         orderBy: { createdAt: 'desc' },
+        where: {
+          OR: [
+            { title: { contains: search } },
+            { description: { contains: search } },
+            { buyer: { name: { contains: search } } },
+            { seller: { name: { contains: search } } },
+            ...(Object.values(TransactionStatus).includes(search as TransactionStatus)
+              ? [{ status: { equals: search as TransactionStatus } }]
+              : []),
+          ],
+        },
         include: {
           buyer: {
             select: {
@@ -115,8 +127,8 @@ export class TransactionService {
       const buyerId = initiatorRole === 'Buyer' ? initiatorUser.id : counterpartyUser?.id;
       const sellerId = initiatorRole === 'Seller' ? initiatorUser.id : counterpartyUser?.id;
 
-       // initiator cannot be same as seller
-      if(buyerId  ==  sellerId) {
+      // initiator cannot be same as seller
+      if (buyerId == sellerId) {
         throw new BadRequestException('Invalid counterparty');
       }
 
@@ -131,7 +143,7 @@ export class TransactionService {
           currency: parsedData.currency ?? 'GHS',
           initiateBy: initiatorRole,
           buyerId,
-          currentRole : initiatorRole,
+          currentRole: initiatorRole,
           sellerId,
           sellerMomoNumber: parsedData.sellerMomoNumber,
           description: parsedData.description,
@@ -140,18 +152,17 @@ export class TransactionService {
           initiatorAccepted: true,
           counterpartyAccepted: false,
           status: 'PENDING',
-          commissionFee : parsedData.commissionFee
+          commissionFee: parsedData.commissionFee
         },
       });
 
-      // notify counterparty if exists
-      if (counterpartyUser?.phone) {
-        // SEND SMS TO COUNTERPART PARTIES
-        // await this.notificationService.sendSMS(
-        //   counterpartyUser.phone,
-        //   `You have a new escrow transaction (${newTx.transCode}). Please log in to accept.`
-        // );
-      }
+      // notify counterparty using the notification service
+      await this.notificationService.sendPushNotification(
+        counterpartyUser.expoToken,
+        `New MiBuyer Transaction`,
+        `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`
+      );
+      
 
       // RETURN TRANSACTION 
       return { message: "Transaction created successfully", id: newTx.id };
@@ -175,14 +186,14 @@ export class TransactionService {
       throw new InternalServerErrorException('Failed to get transaction status.', error);
     }
   }
-  
+
 
   // ACCEPT TRANSACTION
   async acceptTransaction(userId: string, transactionId: string) {
     const tx = await this.db.transaction.findUnique({ where: { id: transactionId } });
     if (!tx) throw new NotFoundException('Transaction not found');
 
-    if(tx.counterpartyAccepted) {
+    if (tx.counterpartyAccepted) {
       throw new ForbiddenException('Counterpart accepted already');
     }
 
@@ -435,7 +446,7 @@ export class TransactionService {
           status: body.status as any, // Cast to any to satisfy TypeScript
         },
       });
-      
+
       // Send SMS to seller if sellerMomoNumber exists
       if (transaction.sellerMomoNumber) {
         const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction.title}, with transaction code ${transaction.transCode} has been initiated by ${transaction.buyer?.name || 'a buyer'} worth GHS ${transaction.amount}. Please visit https://escrowgh.com/approve/${transaction.transCode} to approve or view details`;
@@ -451,15 +462,17 @@ export class TransactionService {
     }
   }
 
-  
+
   // GET RECENT TRANSACTIONS of user add buyer and seller info
   async getRecentTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
-        where: { OR : [
-          {buyerId :userId},
-          {sellerId : userId}
-        ] },
+        where: {
+          OR: [
+            { buyerId: userId },
+            { sellerId: userId }
+          ]
+        },
         take: 5,
         orderBy: {
           createdAt: 'desc',
@@ -505,7 +518,7 @@ export class TransactionService {
 
       const totalTransactions = transactions.length;
       const pendingPayments = transactions.filter(t => t.status === 'PENDING').length;
-      const totalValue =  transactions.filter(t => t.status === 'COMPLETED')
+      const totalValue = transactions.filter(t => t.status === 'COMPLETED')
 
       const openDisputesCount = await this.db.dispute.count({
         where: { userId, status: 'OPEN' }
@@ -541,10 +554,12 @@ export class TransactionService {
   async getUserTransactions(userId: string) {
     try {
       const transactions = await this.db.transaction.findMany({
-        where: { OR : [
-          {buyerId :userId},
-          {sellerId : userId}
-        ] },
+        where: {
+          OR: [
+            { buyerId: userId },
+            { sellerId: userId }
+          ]
+        },
         orderBy: {
           createdAt: 'desc',
         },

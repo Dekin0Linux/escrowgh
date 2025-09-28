@@ -33,8 +33,8 @@ export class DisputeController {
     // SETTLE DISPUTE
     @UseGuards(JwtAuthGuard, IsAdminGuard)
     @Post('settleDispute/:id')
-    settleDispute(@Param('id') id: string, @Body('settleToBuyer') settleToBuyer: boolean) {
-        return this.disputeService.settleDispute(id, settleToBuyer);
+    settleDispute(@Param('id') id: string, @Body('settleToBuyer') settleToBuyer: boolean, @Body('resolution') resolution: string, @Body('resolvedBy') resolvedBy: string) {
+        return this.disputeService.settleDispute(id, settleToBuyer,resolution,resolvedBy);
     }
 
     @UseGuards(JwtAuthGuard)

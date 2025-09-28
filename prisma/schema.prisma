@@ -103,6 +103,7 @@ model Dispute {
   evidence      String?
   info          String?
   disputeNo     String?
+  resolvedBy    String?
 
   // PARTIES
   buyerId  String?
