@@ -135,6 +135,19 @@ export class TransactionController {
     return result;
   }
 
+  // Get monthly transactions
+  @UseGuards(JwtAuthGuard, IsAdminGuard)
+  @Get('/monthlyTransactions')
+  async getMonthlyTransactions() {
+    return this.transactionService.getMonthlyTransactions();
+  }
+
+  // Get monthly transactions counts
+  @UseGuards(JwtAuthGuard, IsAdminGuard)
+  @Get('/monthlyTransactionsCounts')
+  async getMonthlyTransactionsCounts() {
+    return this.transactionService.getMonthlyTransactionsCounts();
+  }
 
 
 }

@@ -590,6 +590,101 @@ export class TransactionService {
     }
   }
 
+  // Get monthly transactions
+  async getMonthlyTransactions() {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        select: {
+          id: true,
+          amount: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const monthlyTransactions = transactions.reduce((acc: any, t: any) => {
+        const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(t.createdAt));
+        const today = new Date();
+        const firstDayOfMonthAgo = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        if (new Date(t.createdAt) >= firstDayOfMonthAgo ) {
+          const existingMonth = acc.find((m: any) => m.month === month);
+          if (existingMonth) {
+            existingMonth.transactions += 1;
+            existingMonth.revenue += t.amount;
+          } else {
+            acc.push({ month, transactions: 1, revenue: t.amount });
+          }
+        }
+        return acc;
+      }, []);
+
+      // Get previous 12 months
+      const previousMonths = Array.from({ length: 12 }, (v, k) => new Date(Date.now() - k * 1000 * 60 * 60 * 24 * 30 * 1000)).map(d => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d));
+
+      // Add previous months with 0 transactions and revenue
+      previousMonths.forEach(m => {
+        const existingMonth = monthlyTransactions.find(mt => mt.month === m);
+        if (!existingMonth) {
+          monthlyTransactions.push({ month: m, transactions: 0, revenue: 0 });
+        }
+      });
+
+      // Sort by month
+      monthlyTransactions.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));      
+
+      return monthlyTransactions;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get monthly transactions.', error);
+    }
+  }
+
+  // Get an array of months and the respective transaction volume or count
+  async getMonthlyTransactionsCounts() {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        select: {
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const monthlyTransactionsCounts = transactions.reduce((acc: any, t: any) => {
+        const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(t.createdAt));
+        const existingMonth = acc.find((m: any) => m.month === month);
+        if (existingMonth) {
+          existingMonth.count += 1;
+          existingMonth.volume += t.amount;
+        } else {
+          acc.push({ month, count: 1, volume: t.amount });
+        }
+        return acc;
+      }, []);
+
+      // Get previous 12 months
+      const previousMonths = Array.from({ length: 12 }, (v, k) => new Date(Date.now() - k * 1000 * 60 * 60 * 24 * 30 * 1000)).map(d => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d));
+
+      // Add previous months with 0 transactions and revenue
+      previousMonths.forEach(m => {
+        const existingMonth = monthlyTransactionsCounts.find(mt => mt.month === m);
+        if (!existingMonth) {
+          monthlyTransactionsCounts.push({ month: m, count: 0, volume: 0 });
+        }
+      });
+
+      // Sort by month
+      monthlyTransactionsCounts.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));      
+
+      return monthlyTransactionsCounts;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get monthly transactions counts.', error);
+    }
+  }
+
+
 }
 
 
