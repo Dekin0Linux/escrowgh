@@ -157,12 +157,14 @@ export class TransactionService {
       });
 
       // notify counterparty using the notification service
-      await this.notificationService.sendPushNotification(
-        counterpartyUser.expoToken,
-        `New MiBuyer Transaction`,
-        `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`
-      );
-      
+      if (counterpartyUser.expoToken) {
+        await this.notificationService.sendPushNotification(
+          counterpartyUser.expoToken,
+          `New MiBuyer Transaction`,
+          `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`
+        );
+      }
+
 
       // RETURN TRANSACTION 
       return { message: "Transaction created successfully", id: newTx.id };
@@ -172,7 +174,7 @@ export class TransactionService {
         throw new BadRequestException('Transaction with this code already exists.');
       }
 
-      console.log(error.message)
+      console.log(error)
       throw new InternalServerErrorException('Failed to create transaction.', error.message);
     }
   }
@@ -608,7 +610,7 @@ export class TransactionService {
         const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(t.createdAt));
         const today = new Date();
         const firstDayOfMonthAgo = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        if (new Date(t.createdAt) >= firstDayOfMonthAgo ) {
+        if (new Date(t.createdAt) >= firstDayOfMonthAgo) {
           const existingMonth = acc.find((m: any) => m.month === month);
           if (existingMonth) {
             existingMonth.transactions += 1;
@@ -632,7 +634,7 @@ export class TransactionService {
       });
 
       // Sort by month
-      monthlyTransactions.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));      
+      monthlyTransactions.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));
 
       return monthlyTransactions;
     } catch (error) {
@@ -676,7 +678,7 @@ export class TransactionService {
       });
 
       // Sort by month
-      monthlyTransactionsCounts.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));      
+      monthlyTransactionsCounts.sort((a, b) => previousMonths.indexOf(a.month) - previousMonths.indexOf(b.month));
 
       return monthlyTransactionsCounts;
     } catch (error) {

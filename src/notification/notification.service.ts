@@ -13,16 +13,20 @@ export class NotificationService {
             title,
             body,
         };
-        const response = await axios.post(this.EXPO_API_URL, message, {
+
+        try {
+            const response = await axios.post(this.EXPO_API_URL, message, {
             headers: {
                 'Accept': 'application/json',
                 'Accept-encoding': 'gzip, deflate',
                 'Content-Type': 'application/json',
             },
         });
-
         // STORE RESPONSE INTO DATABASE FOR LOGGING PURPOSES
-        
         return response.data;
+        } catch (error) {
+            console.error('Error sending push notification:', error);
+            throw error;
+        }
     }
 }
