@@ -14,6 +14,7 @@ import { CloudinaryService } from './cloudinary/cloudinary.service';
 import { NotificationService } from './notification/notification.service';
 import { NotificationController } from './notification/notification.controller';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { EventsGateway } from './events/events.gateway';
 
 @Module({
   imports: [
@@ -32,8 +33,9 @@ import { ThrottlerModule } from '@nestjs/throttler';
     AuthModule,
     CommisionsModule,
     SettlementModule,
+    EventsGateway,
   ],
   controllers: [AppController, NotificationController],
-  providers: [AppService, CloudinaryService, NotificationService],
+  providers: [AppService, CloudinaryService, NotificationService, EventsGateway],
 })
 export class AppModule {}

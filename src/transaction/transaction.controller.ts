@@ -149,5 +149,11 @@ export class TransactionController {
     return this.transactionService.getMonthlyTransactionsCounts();
   }
 
+   @UseGuards(JwtAuthGuard, IsAdminGuard)
+   @Get('/getAnalytics')
+   async getAnalytics() {
+     return this.transactionService.getAnalytics();
+   }
+
 
 }

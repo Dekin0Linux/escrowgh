@@ -156,6 +156,11 @@ export class TransactionService {
         },
       });
 
+      // send sms to counterparty
+      if (counterpartyUser.phone) {
+        await sendSMS(counterpartyUser.phone, `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`);
+      }
+
       // notify counterparty using the notification service
       if (counterpartyUser.expoToken) {
         await this.notificationService.sendPushNotification(
@@ -407,6 +412,32 @@ export class TransactionService {
         releaseDate: new Date(),
       },
     });
+
+    // get seller expoToken from the transaction sellerId
+    const seller = await this.db.transaction.findUnique({
+      where: { id: transactionId },
+      include: { seller: true },
+    });
+
+    // SEND MONEY TO THE SELLER MOMONUMBER
+    if (seller?.seller?.phone) {
+
+      // SEND MONEY TO SELLER
+      
+      sendSMS(
+        seller.seller.phone,
+        `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+      );
+    }
+
+    // notify counterparty using the notification service
+    if (seller?.seller?.expoToken) {
+      await this.notificationService.sendPushNotification(
+        seller.seller.expoToken,
+        `Funds Release`,
+        `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+      );
+    }
 
     // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
     return { message: 'Funds released to seller.' };
@@ -683,6 +714,25 @@ export class TransactionService {
       return monthlyTransactionsCounts;
     } catch (error) {
       throw new InternalServerErrorException('Failed to get monthly transactions counts.', error);
+    }
+  }
+
+  // GET ANALYTICS
+  // TOTAL USERS, TOTAL TRANSACTIONS, ACTIVE DISPUTES, TOTAL REVENUE
+  async getAnalytics() {
+    try {
+      const totalUsers = await this.db.user.count();
+      const totalTransactions = await this.db.transaction.count();
+      const activeDisputes = await this.db.dispute.count({ where: { status: 'OPEN' } });
+      const totalComission = await this.db.transaction.aggregate({ _sum: { commissionFee: true } });
+      return {
+        totalUsers,
+        totalTransactions,
+        activeDisputes,
+        totalComission: totalComission._sum.commissionFee,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get analytics.', error);
     }
   }
 
