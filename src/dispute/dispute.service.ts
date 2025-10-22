@@ -13,7 +13,7 @@ export class DisputeService {
     private readonly db: DatabaseService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly notificationService: NotificationService,
-    ) { }
+  ) { }
 
   // get all disputes
   async getAllDisputes() {
@@ -22,9 +22,9 @@ export class DisputeService {
         include: {
           user: true,
           transaction: true,
-          buyer : {select : {id:true,name:true,email:true,phone:true,expoToken:true}},
-          seller : {select: {id:true,name:true,email:true,phone:true,expoToken:true}}
-        
+          buyer: { select: { id: true, name: true, email: true, phone: true, expoToken: true } },
+          seller: { select: { id: true, name: true, email: true, phone: true, expoToken: true } }
+
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -72,35 +72,57 @@ export class DisputeService {
           info: payload.info,
           disputeNo: generateUserTransCode(),
           //@ts-ignore
-          buyerId : tx?.buyerId,
-          sellerId : tx?.sellerId,
-          
+          buyerId: tx?.buyerId,
+          sellerId: tx?.sellerId,
+
         },
       });
 
+      // get the buyer and seller from the transaction 
+      const buyer = await this.db.user.findUnique({ where: { id: tx?.buyerId! } });
+      const seller = await this.db.user.findUnique({ where: { id: tx?.sellerId! } });
+
       // send sms to seller and buyer
       // send push notification to seller and buyer
-      await this.notificationService.sendPushNotification(
-        newDispute?.buyer?.expoToken,
-        `New Dispute`,
-        `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
-      );
+      if (buyer?.expoToken) {
+        await this.notificationService.sendPushNotification(
+          buyer?.expoToken,
+          `New Dispute`,
+          `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+        );
+      }
 
-      await this.notificationService.sendPushNotification(
-        newDispute?.seller?.expoToken,
-        `New Dispute`,
-        `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
-      );
+      if (seller?.expoToken) {
+        await this.notificationService.sendPushNotification(
+          seller?.expoToken,
+          `New Dispute`,
+          `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+        );
+      }
+
+      // send sms to seller and buyer
+      if (buyer?.phone) {
+        sendSMS(
+          buyer?.phone,
+          `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+        );
+      }
+
+      if (seller?.phone) {
+        sendSMS(
+          seller?.phone,
+          `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+        );
+      }
 
       return { message: "Dispute created successfully" };
 
     } catch (error) {
-      // Optional: handle known Prisma errors specifically
+      // Optional: handle known Prisma errors specifically6
       if (error.code === 'P2002') {
         throw new BadRequestException('Transaction with this code already exists.');
       }
       throw new InternalServerErrorException('Failed to create dispute.', error);
-
     }
 
   }
@@ -110,7 +132,7 @@ export class DisputeService {
   @param transactionId: string
   @param settleToBuyer: boolean
   */
-  async settleDispute(transactionId: string, settleToBuyer: boolean,resolution: string,resolvedBy : string) {
+  async settleDispute(transactionId: string, settleToBuyer: boolean, resolution: string, resolvedBy: string) {
     try {
       const transaction = await this.db.transaction.findUnique({
         where: { id: transactionId },
@@ -121,7 +143,7 @@ export class DisputeService {
       if (!transaction) {
         throw new BadRequestException('Transaction not found.');
       }
-      
+
       if (transaction.status !== 'DISPUTED' || transaction.isFunded !== true) {
         throw new BadRequestException('Transaction is not in dispute or is not funded');
       }
@@ -142,7 +164,7 @@ export class DisputeService {
 
       // update the transaction status to completed
       await this.db.transaction.update({
-        where: { id: transactionId,isFunded: true },
+        where: { id: transactionId, isFunded: true },
         data: {
           status: 'COMPLETED',
           releaseDate: new Date(),
@@ -155,7 +177,7 @@ export class DisputeService {
         data: {
           status: 'RESOLVED',
           resolvedAt: new Date(),
-          resolution:  resolution || `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller' }`,
+          resolution: resolution || `Funds ${settleToBuyer ? 'refunded to buyer' : 'released to seller'}`,
           resolvedBy,
         },
       });
@@ -164,7 +186,7 @@ export class DisputeService {
       if (settleToBuyer) {
         // send money to buyer
         // send SMS to buyer
-        const buyer = await this.db.user.findUnique({ where: { id : transaction?.buyerId || 'undefined'} });
+        const buyer = await this.db.user.findUnique({ where: { id: transaction?.buyerId || 'undefined' } });
         if (buyer?.phone) {
           sendSMS(buyer.phone, `An amount of ${transaction.amount} has been settled to you for ${transaction.title} with transaction code ${transaction.transCode} `);
         }
@@ -257,7 +279,7 @@ export class DisputeService {
     try {
       const disputes = await this.db.dispute.findMany({
         // or buyer
-        where: { OR : [{buyerId :userId},{sellerId : userId}] },
+        where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
         include: {
           user: {
             select: {

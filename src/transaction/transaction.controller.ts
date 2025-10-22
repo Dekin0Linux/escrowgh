@@ -135,6 +135,15 @@ export class TransactionController {
     return result;
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/rejectTransaction')
+  async rejectTransaction(@Param('id') transactionId: string, @Request() req: any) {
+    // assume you set req.user.id in your AuthGuard
+    const userId = req.user.userId;
+    const result = await this.transactionService.rejectTransaction(userId, transactionId);
+    return result;
+  }
+
   // Get monthly transactions
   @UseGuards(JwtAuthGuard, IsAdminGuard)
   @Get('/monthlyTransactions')

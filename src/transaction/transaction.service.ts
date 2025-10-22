@@ -222,8 +222,37 @@ export class TransactionService {
     });
 
     // SEND ACCEPTANCE SMS
-
     return { message: 'Transaction accepted', id: updated.id };
+  }
+
+  // REJECT TRANSACTION
+  async rejectTransaction(userId: string, transactionId: string) {
+    const tx = await this.db.transaction.findUnique({ where: { id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
+
+    if (tx.counterpartyAccepted) {
+      throw new ForbiddenException('Counterpart accepted already');
+    }
+
+
+    // check that user is counterparty
+    if (tx.initiateBy === 'BUYER' && tx.sellerId !== userId) {
+      throw new ForbiddenException('You are not the counterparty');
+    }
+    if (tx.initiateBy === 'SELLER' && tx.buyerId !== userId) {
+      throw new ForbiddenException('You are not the counterparty');
+    }
+
+    const updated = await this.db.transaction.update({
+      where: { id: transactionId },
+      data: {
+        counterpartyAccepted: false,
+        status: 'CANCELED'
+      }
+    });
+
+    // SEND ACCEPTANCE SMS
+    return { message: 'Transaction rejected', id: updated.id };
   }
 
   // Step 1: Initiator creates transaction. Status = PENDING, initiatorAccepted = true, counterpartyAccepted = false.
@@ -484,6 +513,12 @@ export class TransactionService {
       if (transaction.sellerMomoNumber) {
         const smsMsg = `Hello! A buyer has initiated an escrow transaction for ${transaction.title}, with transaction code ${transaction.transCode} has been initiated by ${transaction.buyer?.name || 'a buyer'} worth GHS ${transaction.amount}. Please visit https://escrowgh.com/approve/${transaction.transCode} to approve or view details`;
         sendSMS(transaction.sellerMomoNumber, smsMsg);
+      }
+
+      // send sms to buyer
+      if (transaction.buyer?.phone) {
+        const smsMsg = `Your payment for ${transaction.title}, with transaction code ${transaction.transCode} has been received. Please visit https://escrowgh.com/approve/${transaction.transCode} to view details`;
+        sendSMS(transaction.buyer?.phone, smsMsg);
       }
 
       return { status: 'success', message: 'Transaction paid successfully' };
