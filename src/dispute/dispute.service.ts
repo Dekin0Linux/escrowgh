@@ -96,7 +96,7 @@ export class DisputeService {
         await this.notificationService.sendPushNotification(
           seller?.expoToken,
           `New Dispute`,
-          `You have a new dispute with ${userId} for ${transaction.title}. Please log in to accept.`
+          `A dispute has been created for transaction with title ${transaction.title}, dispute number ${newDispute.disputeNo}. Please log in to accept.`
         );
       }
 

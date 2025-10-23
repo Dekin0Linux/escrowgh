@@ -101,18 +101,27 @@ export class TransactionService {
 
   // CREATE TRANSACTION
   async createTransaction(data: any, file: Express.Multer.File) {
-    const transCode = generateUserTransCode();
+    const transCode = generateUserTransCode(); //generate trnasaction code
 
     try {
-      let parsedData = data;
+      let parsedData = data; //parse form data due to image 
       if (typeof data.payload === 'string') { parsedData = JSON.parse(data.payload); }
 
-      const initiatorRole = parsedData.initiateBy
+      const initiatorRole = parsedData.initiateBy // get the initiator role
 
       // find initiator user
       const initiatorUser = await this.db.user.findUnique({ where: { id: parsedData.initiatorId } });
       if (!initiatorUser) throw new BadRequestException('Initiator user not found');
 
+      // find counterPartyUser
+      let counterPartyUser: any = null;
+      if (parsedData.counterpartyCode) {
+        counterPartyUser = await this.db.user.findUnique({ where: { userCode: parsedData.counterpartyCode } });
+      } else if (parsedData.counterpartyPhone) {
+        counterPartyUser = await this.db.user.findUnique({ where: { phone: parsedData.counterpartyPhone } });
+      }else {
+        throw new BadRequestException('Counterparty not found');
+      }
 
       // find counterparty by code or phone if provided
       let counterpartyUser: any = null;
@@ -120,17 +129,28 @@ export class TransactionService {
         counterpartyUser = await this.db.user.findUnique({ where: { userCode: parsedData.counterpartyCode } });
       } else if (parsedData.counterpartyPhone) {
         counterpartyUser = await this.db.user.findUnique({ where: { phone: parsedData.counterpartyPhone } });
+      }else {
+        throw new BadRequestException('Counterparty not found');
       }
+
+      // if counter id not exist throw error
+      if (!counterpartyUser) throw new BadRequestException('Counterparty not found');
+
+      // if initiator id not exist throw error
+      if (!initiatorUser) throw new BadRequestException('Initiator user not found');
+
+      // if initiator id is same as counterparty id throw error
+      if (initiatorUser?.id === counterpartyUser?.id) throw new BadRequestException('Initiator and counterparty cannot be the same');
 
 
       // map buyer/seller ids based on initiatorRole
-      const buyerId = initiatorRole === 'Buyer' ? initiatorUser.id : counterpartyUser?.id;
-      const sellerId = initiatorRole === 'Seller' ? initiatorUser.id : counterpartyUser?.id;
+      const buyerId = initiatorRole === 'Buyer' ? initiatorUser?.id : counterpartyUser?.id;
+      const sellerId = initiatorRole === 'Seller' ? initiatorUser?.id : counterpartyUser?.id;
 
-      // initiator cannot be same as seller
-      if (buyerId == sellerId) {
-        throw new BadRequestException('Invalid counterparty');
-      }
+      // // initiator cannot be same as seller
+      // if (buyerId == sellerId) {
+      //   throw new BadRequestException('Invalid counterparty');
+      // }
 
       // IMAGE UPLOAD
       const itemImage = file ? await this.cloudinaryService.uploadImage(file) : null;
@@ -158,7 +178,7 @@ export class TransactionService {
 
       // send sms to counterparty
       if (counterpartyUser.phone) {
-        await sendSMS(counterpartyUser.phone, `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`);
+        sendSMS(counterpartyUser.phone, `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`);
       }
 
       // notify counterparty using the notification service
@@ -170,7 +190,6 @@ export class TransactionService {
         );
       }
 
-
       // RETURN TRANSACTION 
       return { message: "Transaction created successfully", id: newTx.id };
     } catch (error) {
@@ -178,9 +197,12 @@ export class TransactionService {
       if (error.code === 'P2002') {
         throw new BadRequestException('Transaction with this code already exists.');
       }
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
 
-      console.log(error)
-      throw new InternalServerErrorException('Failed to create transaction.', error.message);
+      console.log(error.status)
+      throw new InternalServerErrorException('Failed to create transaction.', error);
     }
   }
 
@@ -287,7 +309,10 @@ export class TransactionService {
       });
       return { message: "Transaction deleted successfully" };
     } catch (error) {
-      throw new InternalServerErrorException('Failed to delete transaction.', error);
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
+      throw new InternalServerErrorException(error);
     }
   }
 
@@ -411,65 +436,74 @@ export class TransactionService {
 
   // service to release funds to seller number and check status as COMPLETED
   async releaseFunds(transactionId: string, buyerId: string) {
-    const transaction = await this.db.transaction.findUnique({
-      where: { id: transactionId },
-      include: { payment: true },
-    });
-
-    if (!transaction || transaction.buyerId !== buyerId) {
-      throw new BadRequestException('Transaction not found or unauthorized.');
-    }
-
-    if (transaction.status !== 'IN_ESCROW') {
-      throw new BadRequestException('Funds cannot be released at this stage.');
-    }
-
-    // Create settlement record
-    await this.db.settlement.create({
-      data: {
-        transactionId,
-        amount: transaction?.amount,
-        releasedTo: transaction?.sellerId! || transaction?.sellerMomoNumber!,
-        type: 'RELEASE_TO_SELLER',
-      },
-    });
-
-    await this.db.transaction.update({
-      where: { id: transactionId },
-      data: {
-        status: 'COMPLETED',
-        releaseDate: new Date(),
-      },
-    });
-
-    // get seller expoToken from the transaction sellerId
-    const seller = await this.db.transaction.findUnique({
-      where: { id: transactionId },
-      include: { seller: true },
-    });
-
-    // SEND MONEY TO THE SELLER MOMONUMBER
-    if (seller?.seller?.phone) {
-
-      // SEND MONEY TO SELLER
+    try {
       
-      sendSMS(
-        seller.seller.phone,
-        `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
-      );
-    }
+        const transaction = await this.db.transaction.findUnique({
+          where: { id: transactionId },
+          include: { payment: true },
+        });
+    
+        if (!transaction || transaction.buyerId !== buyerId) {
+          throw new BadRequestException('Transaction not found or unauthorized.');
+        }
+    
+        if (transaction.status !== 'IN_ESCROW') {
+          throw new BadRequestException('Funds cannot be released at this stage.');
+        }
+    
+        // Create settlement record
+        await this.db.settlement.create({
+          data: {
+            transactionId,
+            amount: transaction?.amount,
+            releasedTo: transaction?.sellerId! || transaction?.sellerMomoNumber!,
+            type: 'RELEASE_TO_SELLER',
+          },
+        });
+    
+        await this.db.transaction.update({
+          where: { id: transactionId },
+          data: {
+            status: 'COMPLETED',
+            releaseDate: new Date(),
+          },
+        });
+    
+        // get seller expoToken from the transaction sellerId
+        const seller = await this.db.transaction.findUnique({
+          where: { id: transactionId },
+          include: { seller: true },
+        });
+    
+        // SEND MONEY TO THE SELLER MOMONUMBER
+        if (seller?.seller?.phone) {
+    
+          // SEND MONEY TO SELLER
+          
+          sendSMS(
+            seller.seller.phone,
+            `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+          );
+        }
+    
+        // notify counterparty using the notification service
+        if (seller?.seller?.expoToken) {
+          await this.notificationService.sendPushNotification(
+            seller.seller.expoToken,
+            `Funds Release`,
+            `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+          );
+        }
+    
+        // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
+        return { message: 'Funds released to seller.' };
+    } catch (error) {
 
-    // notify counterparty using the notification service
-    if (seller?.seller?.expoToken) {
-      await this.notificationService.sendPushNotification(
-        seller.seller.expoToken,
-        `Funds Release`,
-        `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
-      );
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
+      throw new InternalServerErrorException('Failed to release funds.', error);
     }
-
-    // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
-    return { message: 'Funds released to seller.' };
   }
 
   // Update payment status and create payment record
@@ -526,6 +560,12 @@ export class TransactionService {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
+
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
+
+      
       throw new InternalServerErrorException('Failed to update transaction.', error);
     }
   }

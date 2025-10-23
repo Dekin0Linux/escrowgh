@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module,MiddlewareConsumer,NestModule  } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config'; // 👈 import config module
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,6 +15,7 @@ import { NotificationService } from './notification/notification.service';
 import { NotificationController } from './notification/notification.controller';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventsGateway } from './events/events.gateway';
+import { LoggerMiddleware } from './common/middleware/loggeer.middleware';
 
 @Module({
   imports: [
@@ -34,8 +35,13 @@ import { EventsGateway } from './events/events.gateway';
     CommisionsModule,
     SettlementModule,
     EventsGateway,
+    
   ],
   controllers: [AppController, NotificationController],
   providers: [AppService, CloudinaryService, NotificationService, EventsGateway],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*');
+  }
+}
