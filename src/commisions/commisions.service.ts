@@ -14,6 +14,7 @@ export class CommisionsService {
             { min: 5001, max: Infinity, type: 'flat', rate: 100 },
         ];
     }
+    
 
     async calculateCommission(amount: number) {
         // REJECT IF NOT AMOUNT IS PASSED

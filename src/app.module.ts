@@ -16,6 +16,8 @@ import { NotificationController } from './notification/notification.controller';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventsGateway } from './events/events.gateway';
 import { LoggerMiddleware } from './common/middleware/loggeer.middleware';
+import { ShopController } from './shop/shop.controller';
+import { ShopModule } from './shop/shop.module';
 
 @Module({
   imports: [
@@ -35,9 +37,10 @@ import { LoggerMiddleware } from './common/middleware/loggeer.middleware';
     CommisionsModule,
     SettlementModule,
     EventsGateway,
+    ShopModule,
     
   ],
-  controllers: [AppController, NotificationController],
+  controllers: [AppController, NotificationController, ShopController],
   providers: [AppService, CloudinaryService, NotificationService, EventsGateway],
 })
 export class AppModule implements NestModule {

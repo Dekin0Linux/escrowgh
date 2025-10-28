@@ -33,6 +33,7 @@ model User {
   buyerTransactions  Transaction[]        @relation("BuyerTransactions")
   sellerTransactions Transaction[]        @relation("SellerTransactions")
   notificationTokens NotificationTokens[]
+  shops              Shop[]
 
   disputesAsBuyer  Dispute[] @relation("BuyerDisputes")
   disputesAsSeller Dispute[] @relation("SellerDisputes")
@@ -52,6 +53,7 @@ model Transaction {
   counterpartyPhone String?
   currentRole       String? @default("BUYER")
   initiateBy        String? @default("BUYER")
+  shopId            String?
 
   // acceptance flow
   initiatorAccepted    Boolean @default(true) // creator automatically accepts
@@ -76,6 +78,8 @@ model Transaction {
   Settlement Settlement[]
   buyer      User?        @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller     User?        @relation("SellerTransactions", fields: [sellerId], references: [id])
+  shop       Shop?        @relation("ShopTransactions", fields: [shopId], references: [id])
+  
 }
 
 model Commission {
@@ -148,6 +152,26 @@ model NotificationTokens {
 
   user User @relation(fields: [userId], references: [id])
 }
+
+model Shop {
+  id          String   @id @default(uuid())
+  shopCode    String   @unique
+  shopName    String
+  description String?
+  momoNumber String
+  email       String?
+  address     String?
+  city        String?
+  ownerId     String
+  icon        String?
+  owner       User     @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  transactions Transaction[] @relation("ShopTransactions")
+
+  @@index([shopCode, shopName, momoNumber])
+}
+
 
 enum TransactionStatus {
   PENDING

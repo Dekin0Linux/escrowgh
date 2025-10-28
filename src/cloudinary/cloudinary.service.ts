@@ -16,7 +16,7 @@ export class CloudinaryService {
 
   async uploadImage(file: Express.Multer.File): Promise<string> {
     //  Step 1: File size check (e.g. 2MB max)
-    const MAX_SIZE = 1 * 1024 * 1024; // 4MB
+    const MAX_SIZE = 4 * 1024 * 1024; // 4MB
     if (file.size > MAX_SIZE) {
       throw new BadRequestException('File too large. Maximum allowed size is 4MB.');
     }
@@ -26,7 +26,7 @@ export class CloudinaryService {
     if (!allowedTypes.includes(file.mimetype)) {
       throw new BadRequestException('Only JPG and PNG image formats are allowed.');
     }
-
+    
     // Step 3: Upload to Cloudinary
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
