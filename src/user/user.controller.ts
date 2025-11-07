@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Request, UseGuards, ValidationPipe } from '@nestjs/common';
 import { UserService } from './user.service';
 // import { PrismaClient,Prisma } from '../../generated/prisma';
 import { Prisma } from '@prisma/client';
@@ -82,10 +82,35 @@ export class UserController {
         return this.user.verifyPwdOtp(data);
     }
 
+    // save push notification token
     @Post('save-token')
     async saveToken(@Body() body: SaveTokenDto) {
         await this.user.updatePushToken(body.userId, body.token);
         return { success: true };
+    }
+
+    // block user
+    @UseGuards(JwtAuthGuard, IsAdminGuard)
+    @Post('block/:id')
+    @ApiBearerAuth()
+    blockUser(@Param('id') id:string){
+        return this.user.blockUser(id)
+    }
+
+    // unblock user
+    @UseGuards(JwtAuthGuard, IsAdminGuard)
+    @Post('unblock/:id')
+    @ApiBearerAuth()
+    unblockUser(@Param('id') id:string){
+        return this.user.unblockUser(id)
+    }
+
+    // change password
+    @UseGuards(JwtAuthGuard)
+    @Post('change-password')
+    @ApiBearerAuth()
+    changePassword(@Body(new ValidationPipe) data:{oldPassword:string,newPassword:string},@Request() req:any){
+        return this.user.changePassword(data,req.user.id)
     }
 
 }

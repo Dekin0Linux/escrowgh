@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 
+
 @Injectable()
 export class CommisionsService {
     constructor(private readonly db: DatabaseService) { }

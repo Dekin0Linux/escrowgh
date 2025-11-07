@@ -6,6 +6,7 @@ import { sendSMS } from '../../utils/sms';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { NotificationService } from 'src/notification/notification.service';
+import { transferPayment } from 'utils/paymentApi'
 
 @Injectable()
 export class TransactionService {
@@ -42,6 +43,7 @@ export class TransactionService {
     }
   }
 
+  // GET ALL TRANSACTIONS
   async getAllTransactions(paginationDto: { limit?: number; page?: number, search?: string | undefined }) {
     const { limit = 10, page = 1, search = undefined } = paginationDto;
     const skip = (page - 1) * limit;
@@ -99,7 +101,7 @@ export class TransactionService {
     };
   }
 
-  // CREATE TRANSACTION
+  // ============================================ CREATE TRANSACTION =========================================
   async createTransaction(data: any, file: Express.Multer.File) {
     const transCode = generateUserTransCode(); //generate trnasaction code
 
@@ -107,21 +109,17 @@ export class TransactionService {
       let parsedData = data; //parse form data due to image 
       if (typeof data.payload === 'string') { parsedData = JSON.parse(data.payload); }
 
-      const initiatorRole = parsedData.initiateBy // get the initiator role
+      const initiatorRole = parsedData.initiateBy // get the initiator role either buyer or seller
 
       // find initiator user
       const initiatorUser = await this.db.user.findUnique({ where: { id: parsedData.initiatorId } });
       if (!initiatorUser) throw new BadRequestException('Initiator user not found');
 
-      // find counterPartyUser
-      let counterPartyUser: any = null;
-      if (parsedData.counterpartyCode) {
-        counterPartyUser = await this.db.user.findUnique({ where: { userCode: parsedData.counterpartyCode } });
-      } else if (parsedData.counterpartyPhone) {
-        counterPartyUser = await this.db.user.findUnique({ where: { phone: parsedData.counterpartyPhone } });
-      }else {
-        throw new BadRequestException('Counterparty not found');
-      }
+      // check if initiaor is blocked
+      if (initiatorUser?.isBlocked) throw new BadRequestException('Initiator user is blocked');
+      // if initiator id not exist throw error
+      if (!initiatorUser) throw new BadRequestException('Initiator user not found');
+      
 
       // find counterparty by code or phone if provided
       let counterpartyUser: any = null;
@@ -129,28 +127,23 @@ export class TransactionService {
         counterpartyUser = await this.db.user.findUnique({ where: { userCode: parsedData.counterpartyCode } });
       } else if (parsedData.counterpartyPhone) {
         counterpartyUser = await this.db.user.findUnique({ where: { phone: parsedData.counterpartyPhone } });
-      }else {
+      } else {
         throw new BadRequestException('Counterparty not found');
       }
+       // if initiator id is same as counterparty id throw error
+      if (initiatorUser?.id === counterpartyUser?.id) throw new BadRequestException('Initiator and counterparty cannot be the same');
+
+      // check if counterparty is blocked
+      if (counterpartyUser?.isBlocked) throw new BadRequestException('Counterparty user is blocked, Transaction cannot be made to this user');
 
       // if counter id not exist throw error
       if (!counterpartyUser) throw new BadRequestException('Counterparty not found');
-
-      // if initiator id not exist throw error
-      if (!initiatorUser) throw new BadRequestException('Initiator user not found');
-
-      // if initiator id is same as counterparty id throw error
-      if (initiatorUser?.id === counterpartyUser?.id) throw new BadRequestException('Initiator and counterparty cannot be the same');
-
+      // if amount is less than 1 throw error
+      if (parsedData.amount < 1) throw new BadRequestException('Amount must be greater than 0');
 
       // map buyer/seller ids based on initiatorRole
       const buyerId = initiatorRole === 'Buyer' ? initiatorUser?.id : counterpartyUser?.id;
       const sellerId = initiatorRole === 'Seller' ? initiatorUser?.id : counterpartyUser?.id;
-
-      // // initiator cannot be same as seller
-      // if (buyerId == sellerId) {
-      //   throw new BadRequestException('Invalid counterparty');
-      // }
 
       // IMAGE UPLOAD
       const itemImage = file ? await this.cloudinaryService.uploadImage(file) : null;
@@ -165,7 +158,7 @@ export class TransactionService {
           buyerId,
           currentRole: initiatorRole,
           sellerId,
-          sellerMomoNumber: parsedData.sellerMomoNumber,
+          sellerMomoNumber: parsedData.sellerMomoNumber, //phonenumber to pay seller
           description: parsedData.description,
           itemImage,
           counterpartyPhone: counterpartyUser ? counterpartyUser.phone : parsedData.counterpartyPhone,
@@ -185,10 +178,22 @@ export class TransactionService {
       if (counterpartyUser.expoToken) {
         await this.notificationService.sendPushNotification(
           counterpartyUser.expoToken,
-          `New MiBuyer Transaction`,
-          `You have a new escrow transaction from ${initiatorUser.name} with an amount of ${parsedData.amount}. Please log in to accept.`
+          `New Transaction`,
+          `You’ve received an escrow request from ${initiatorUser.name} for ${parsedData.amount}. Tap accept or reject`,
+          { screen: `/transaction-details/${newTx.id}` }
         );
       }
+
+      // notify initiator using the notification service
+      if (initiatorUser.expoToken) {
+        await this.notificationService.sendPushNotification(
+          initiatorUser.expoToken,
+          `New Transaction`,
+          `You’ve created a new escrow transaction for ${counterpartyUser.name} for ${parsedData.amount}. `,
+          { screen: `/transaction-details/${newTx.id}` }
+        );
+      }
+
 
       // RETURN TRANSACTION 
       return { message: "Transaction created successfully", id: newTx.id };
@@ -197,11 +202,11 @@ export class TransactionService {
       if (error.code === 'P2002') {
         throw new BadRequestException('Transaction with this code already exists.');
       }
-      if(error.status === 400){
+      if (error.status === 400) {
         throw new BadRequestException(error);
       }
 
-      console.log(error.status)
+      console.log(error)
       throw new InternalServerErrorException('Failed to create transaction.', error);
     }
   }
@@ -226,6 +231,10 @@ export class TransactionService {
       throw new ForbiddenException('Counterpart accepted already');
     }
 
+    // get initiator user
+    const initiatorUser = await this.db.user.findUnique({ where: { id: tx.initiateBy === 'Buyer' ? (tx.buyerId ?? undefined) : (tx.sellerId ?? undefined) } });
+    // get counterparty user
+    const counterpartyUser = await this.db.user.findUnique({ where: { id: tx.initiateBy === 'Buyer' ? (tx.sellerId ?? undefined) : (tx.buyerId ?? undefined) } });
 
     // check that user is counterparty
     if (tx.initiateBy === 'BUYER' && tx.sellerId !== userId) {
@@ -243,11 +252,31 @@ export class TransactionService {
       }
     });
 
+    //  send acceptance notification to initiator
+    if (initiatorUser?.expoToken) {
+      await this.notificationService.sendPushNotification(
+        initiatorUser.expoToken,
+        `Transaction Accepted`,
+        `Your transaction with ${counterpartyUser?.name} has been accepted.`,
+        { screen: "/transaction" }
+      );
+    }
+
+    // send acceptance notification to counterparty
+    if (counterpartyUser?.expoToken) {
+      await this.notificationService.sendPushNotification(
+        counterpartyUser.expoToken,
+        `Transaction Accepted`,
+        `Your transaction with ${initiatorUser?.name} has been accepted.`,
+        { screen: "/transaction" }
+      );
+    }
+
     // SEND ACCEPTANCE SMS
     return { message: 'Transaction accepted', id: updated.id };
   }
 
-  // REJECT TRANSACTION
+  // ========================================= REJECT TRANSACTION =========================================
   async rejectTransaction(userId: string, transactionId: string) {
     const tx = await this.db.transaction.findUnique({ where: { id: transactionId } });
     if (!tx) throw new NotFoundException('Transaction not found');
@@ -264,6 +293,11 @@ export class TransactionService {
     if (tx.initiateBy === 'SELLER' && tx.buyerId !== userId) {
       throw new ForbiddenException('You are not the counterparty');
     }
+    // get initiator user
+    const initiatorUser = await this.db.user.findUnique({ where: { id: tx.initiateBy === 'Buyer' ? (tx.buyerId ?? undefined) : (tx.sellerId ?? undefined) } });
+    // get counterparty user
+    const counterpartyUser = await this.db.user.findUnique({ where: { id: tx.initiateBy === 'Buyer' ? (tx.sellerId ?? undefined) : (tx.buyerId ?? undefined) } });
+
 
     const updated = await this.db.transaction.update({
       where: { id: transactionId },
@@ -273,21 +307,30 @@ export class TransactionService {
       }
     });
 
-    // SEND ACCEPTANCE SMS
-    return { message: 'Transaction rejected', id: updated.id };
+    //  send rejection notification to initiator
+    if (initiatorUser?.expoToken) {
+      await this.notificationService.sendPushNotification(
+        initiatorUser.expoToken,
+        `Transaction Rejected`,
+        `Your transaction with ${counterpartyUser?.name} has been rejected.`,
+        { screen: "/transaction" }
+      );
+    }
+
+    // send rejection notification to counterparty
+    if (counterpartyUser?.expoToken) {
+      await this.notificationService.sendPushNotification(
+        counterpartyUser.expoToken,
+        `Transaction Rejected`,
+        `Your transaction with ${initiatorUser?.name} has been rejected.`,
+        { screen: "/transaction" }
+      );
+    }
+
+    return { message: 'Transaction rejected' };
   }
 
-  // Step 1: Initiator creates transaction. Status = PENDING, initiatorAccepted = true, counterpartyAccepted = false.
-
-  // Step 2: Counterparty logs in and “accepts.” Status = ACCEPTED.
-
-  // Step 3: Buyer pays. Status = FUNDED, isFunded = true.
-
-  // Step 4: Seller delivers, buyer releases. Status = COMPLETED.
-
-
-
-  // update transaction info
+  // ========================================= UPDATE TRANSACTION INFO =========================================
   async updateTransactionInfo(id: string, data: any) {
     try {
       await this.db.transaction.update({
@@ -301,6 +344,8 @@ export class TransactionService {
   }
 
 
+  // ========================================= DELETE TRANSACTION =========================================
+
   // DELETE TRANSACTION
   async deleteTransaction(id: string) {
     try {
@@ -309,12 +354,14 @@ export class TransactionService {
       });
       return { message: "Transaction deleted successfully" };
     } catch (error) {
-      if(error.status === 400){
+      if (error.status === 400) {
         throw new BadRequestException(error);
       }
       throw new InternalServerErrorException(error);
     }
   }
+
+  // ========================================= GET TRANSACTION BY ID =========================================
 
   // GET TRANSACTION BY ID
   async getTransactionById(id: string) {
@@ -354,6 +401,8 @@ export class TransactionService {
     }
   }
 
+  // ========================================= GET TRANSACTION BY CODE =========================================
+
   // GET TRANSACTION BY 
   async getTransactionByCode(code: string) {
     try {
@@ -364,6 +413,8 @@ export class TransactionService {
     }
   }
 
+  // ========================================= UPDATE TRANSACTION STATUS =========================================
+
   // update transaction status
   async updateTransactionStatus(id: string, status: any) {
     try {
@@ -373,9 +424,14 @@ export class TransactionService {
       });
       return updatedTransaction;
     } catch (error) {
+      if (error.status === 400) {
+        throw new BadRequestException(error);
+      }
       throw new InternalServerErrorException('Failed to update transaction status.', error);
     }
   }
+
+  // ========================================= FILTER TRANSACTIONS WITH PAGINATION =========================================
 
   // FILTER TRANSACTIONS WITH PAGINATION
   async filterTransactions(filter: any, pagination: { page: number; limit: number }) {
@@ -437,74 +493,172 @@ export class TransactionService {
   // service to release funds to seller number and check status as COMPLETED
   async releaseFunds(transactionId: string, buyerId: string) {
     try {
-      
-        const transaction = await this.db.transaction.findUnique({
-          where: { id: transactionId },
-          include: { payment: true },
-        });
-    
-        if (!transaction || transaction.buyerId !== buyerId) {
-          throw new BadRequestException('Transaction not found or unauthorized.');
-        }
-    
-        if (transaction.status !== 'IN_ESCROW') {
-          throw new BadRequestException('Funds cannot be released at this stage.');
-        }
-    
-        // Create settlement record
-        await this.db.settlement.create({
-          data: {
-            transactionId,
-            amount: transaction?.amount,
-            releasedTo: transaction?.sellerId! || transaction?.sellerMomoNumber!,
-            type: 'RELEASE_TO_SELLER',
-          },
-        });
-    
-        await this.db.transaction.update({
-          where: { id: transactionId },
-          data: {
-            status: 'COMPLETED',
-            releaseDate: new Date(),
-          },
-        });
-    
-        // get seller expoToken from the transaction sellerId
-        const seller = await this.db.transaction.findUnique({
-          where: { id: transactionId },
-          include: { seller: true },
-        });
-    
-        // SEND MONEY TO THE SELLER MOMONUMBER
-        if (seller?.seller?.phone) {
-    
-          // SEND MONEY TO SELLER
-          
-          sendSMS(
-            seller.seller.phone,
-            `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
-          );
-        }
-    
-        // notify counterparty using the notification service
-        if (seller?.seller?.expoToken) {
-          await this.notificationService.sendPushNotification(
-            seller.seller.expoToken,
-            `Funds Release`,
-            `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
-          );
-        }
-    
-        // SEND RELEASE FUNDS SMS TO SELLER MOMONUMBER using our sms function
-        return { message: 'Funds released to seller.' };
-    } catch (error) {
+      // find transaction by id
+      const transaction = await this.db.transaction.findUnique({
+        where: { id: transactionId },
+        include: { payment: true },
+      });
 
-      if(error.status === 400){
+      // check if transaction exists and buyer id matches
+      if (!transaction || transaction.buyerId !== buyerId) {
+        throw new BadRequestException('Transaction not found or unauthorized.');
+      }
+
+      // check if transaction status is IN_ESCROW
+      if (transaction.status !== 'IN_ESCROW') {
+        throw new BadRequestException('Funds cannot be released at this stage.');
+      }
+
+      // SEND THE MONEY TO THE SELLER MOMONUMBER
+      if (transaction?.sellerMomoNumber) {
+        try {
+          const response = await transferPayment({
+            sellerMomoNumber: transaction?.sellerMomoNumber,
+            network: "MTN",
+            amount: transaction?.amount,
+            "r-switch": "FLT",
+            desc: `Release of funds for transaction ${transaction?.transCode}`,
+            pass_code: ""
+          })
+
+          if (response?.status === "approved" && response?.code === "000") {
+            console.log(response)
+            // Create settlement record
+            await this.db.settlement.create({
+              data: {
+                transactionId,
+                amount: transaction?.amount,
+                releasedTo: transaction?.sellerId! || transaction?.sellerMomoNumber!,
+                type: 'RELEASE_TO_SELLER',
+              },
+            });
+
+            // update transaction status to COMPLETED
+            await this.db.transaction.update({
+              where: { id: transactionId },
+              data: {
+                status: 'COMPLETED',
+                releaseDate: new Date(),
+              },
+            });
+
+            // get buyer 
+            const buyer = await this.db.transaction.findUnique({
+              where: { id: transactionId },
+              include: { buyer: true },
+            });
+
+            // send SMS to buyer
+            if (buyer?.buyer?.phone) {
+              sendSMS(
+                buyer.buyer.phone,
+                `An amount of GHS ${transaction.amount} has been released to the seller. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+              );
+            }
+
+            // get seller expoToken from the transaction sellerId
+            const seller = await this.db.transaction.findUnique({
+              where: { id: transactionId },
+              include: { seller: true },
+            });
+
+            // SEND MONEY TO THE SELLER MOMONUMBER
+            if (seller?.seller?.phone) {
+              // SEND MONEY TO SELLER
+              sendSMS(
+                seller.seller.phone,
+                `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+              );
+            }
+
+            // notify counterparty using the notification service
+            if (seller?.seller?.expoToken) {
+              await this.notificationService.sendPushNotification(
+                seller?.seller.expoToken,
+                `Funds Release`,
+                `An amount of GHS ${transaction.amount} has been released to your account. For the payment of ${transaction.title}, Transaction is now COMPLETED`
+              );
+            }
+
+            // send response to user 
+            return { message: 'Funds released to seller.' ,response };
+
+          } else {
+            throw new BadRequestException('Failed to release funds.');
+          }
+        } catch (error) {
+          throw new BadRequestException(error);
+        }
+
+      }
+
+
+    } catch (error) {
+      if (error.status === 400) {
         throw new BadRequestException(error);
       }
       throw new InternalServerErrorException('Failed to release funds.', error);
     }
   }
+
+  // ================================== SELLER REQUEST RELEASE =========================================
+  async requestReleaseFund(transactionId: string, sellerId: string){
+    try {
+      const transaction = await this.db.transaction.findUnique({
+        where: { id: transactionId },
+        include: { seller: true }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found.');
+      }
+
+      if (!transaction.sellerId) {
+        throw new BadRequestException('Transaction must have a seller to process release.');
+      }
+
+      if (transaction.sellerId !== sellerId) {
+        throw new BadRequestException('Unauthorized to release funds.');
+      }
+
+      if (transaction.status !== 'IN_ESCROW') {
+        throw new BadRequestException('Funds cannot be released at this stage.');
+      }
+
+      // update transaction status to REQUEST_RELEASE
+      await this.db.transaction.update({
+        where: { id: transactionId },
+        data: { releaseRequested : true },
+      });
+
+      // get buyer
+      const buyer = await this.db.transaction.findUnique({
+        where: { id: transactionId },
+        include: { buyer: true },
+      });
+
+      const seller = await this.db.transaction.findUnique({
+        where: { id: transactionId },
+        include: { seller: true },
+      });
+
+      // send notification to buyer
+      if (buyer?.buyer?.expoToken) {
+        await this.notificationService.sendPushNotification(
+          buyer.buyer.expoToken,
+          `Funds Release Request`,
+          `The seller for ${transaction?.title} has requested to release funds. Release funds if you have received the item.`,
+          { screen: `/transaction-details/${transaction.id}` }
+        );
+      }
+    } catch (error) {
+      if (error.status === 400) {
+        throw new BadRequestException(error);
+      }
+      throw new InternalServerErrorException('Failed to release funds.', error);
+    }
+  }
+
 
   // Update payment status and create payment record
   async updateIsPaid(transactionId: string, body: { reference: string; status: string }) {
@@ -561,11 +715,11 @@ export class TransactionService {
         throw error;
       }
 
-      if(error.status === 400){
+      if (error.status === 400) {
         throw new BadRequestException(error);
       }
 
-      
+
       throw new InternalServerErrorException('Failed to update transaction.', error);
     }
   }
@@ -811,6 +965,48 @@ export class TransactionService {
     }
   }
 
+
+  // GET TRANSACTIONS THE REQUIRE ATTENTION ( TRANSACTION GREATER THAN OR EQUAL TO 3 DAYS) or transaction whose release is requested
+  async getTransactionsRequireAttention(status?: TransactionStatus) {
+    try {
+      const transactions = await this.db.transaction.findMany({
+        where: {
+          createdAt: {
+            lte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+          },
+          OR: [
+            { status: status },
+            { releaseRequested: true },
+          ],
+        },
+        include: {
+          buyer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              expoToken: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              userCode: true,
+              expoToken: true,
+            },
+          },
+        },
+      });
+      return transactions;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to get transactions the require attention.', error);
+    }
+  }
 
 }
 

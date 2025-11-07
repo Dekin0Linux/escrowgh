@@ -16,6 +16,8 @@ import { NotificationController } from './notification/notification.controller';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventsGateway } from './events/events.gateway';
 import { LoggerMiddleware } from './common/middleware/loggeer.middleware';
+import { ShopController } from './shop/shop.controller';
+import { ShopModule } from './shop/shop.module';
 
 @Module({
   imports: [
@@ -35,10 +37,11 @@ import { LoggerMiddleware } from './common/middleware/loggeer.middleware';
     CommisionsModule,
     SettlementModule,
     EventsGateway,
+    ShopModule,
     
   ],
-  controllers: [AppController, NotificationController],
-  providers: [AppService, CloudinaryService, NotificationService, EventsGateway],
+  controllers: [AppController, NotificationController, ShopController], //specifies controllers we want to use in other modules of our app
+  providers: [AppService, CloudinaryService, NotificationService, EventsGateway], //specifies services we want to use in other modules of our app
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

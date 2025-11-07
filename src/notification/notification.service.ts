@@ -6,12 +6,13 @@ export class NotificationService {
     private EXPO_API_URL = 'https://exp.host/--/api/v2/push/send';
 
     async sendPushNotification(expoPushToken: string, title: string, body:
-        string) {
+        string, data?: any) {
         const message = {
             to: expoPushToken,
             sound: 'default',
             title,
             body,
+            data,
         };
 
         try {
