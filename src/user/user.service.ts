@@ -24,6 +24,7 @@ export class UserService {
       email: user.email,
       phone: user.phone,
       isAdmin: user.isAdmin,
+      isBlocked: user.isBlocked,
     };
   
     return this.jwtService.sign(payload);
@@ -87,7 +88,7 @@ export class UserService {
       if (!user) throw new NotFoundException('User not found');
   
       const isMatch = await comparePassword(data.password, user.password);
-      if (!isMatch) throw new BadRequestException('Invalid password');
+      if (!isMatch) throw new BadRequestException('Invalid Credentials');
   
       const access_token = this.generateToken(user);
   

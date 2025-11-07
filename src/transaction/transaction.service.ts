@@ -277,16 +277,6 @@ export class TransactionService {
     return { message: 'Transaction rejected', id: updated.id };
   }
 
-  // Step 1: Initiator creates transaction. Status = PENDING, initiatorAccepted = true, counterpartyAccepted = false.
-
-  // Step 2: Counterparty logs in and “accepts.” Status = ACCEPTED.
-
-  // Step 3: Buyer pays. Status = FUNDED, isFunded = true.
-
-  // Step 4: Seller delivers, buyer releases. Status = COMPLETED.
-
-
-
   // update transaction info
   async updateTransactionInfo(id: string, data: any) {
     try {
@@ -373,6 +363,9 @@ export class TransactionService {
       });
       return updatedTransaction;
     } catch (error) {
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
       throw new InternalServerErrorException('Failed to update transaction status.', error);
     }
   }

@@ -78,6 +78,7 @@ export class ShopService {
         }
     }
 
+    
     // SEARCH SHOP BY IDENTIFIER OR GET ALL SHOPS
     async searchShop(identifier: string) {
         if (identifier === 'all') {

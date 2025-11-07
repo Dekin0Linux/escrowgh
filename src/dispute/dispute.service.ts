@@ -139,11 +139,12 @@ export class DisputeService {
         include: { payment: true },
       });
 
-
+      // check if transaction is found
       if (!transaction) {
         throw new BadRequestException('Transaction not found.');
       }
 
+      // check if transaction is in dispute and funded
       if (transaction.status !== 'DISPUTED' || transaction.isFunded !== true) {
         throw new BadRequestException('Transaction is not in dispute or is not funded');
       }
@@ -201,6 +202,9 @@ export class DisputeService {
 
       return { message: 'Dispute settled successfully.' };
     } catch (error) {
+      if(error.status === 400){
+        throw new BadRequestException(error);
+      }
       throw new InternalServerErrorException(error.message);
     }
   }
@@ -307,10 +311,10 @@ export class DisputeService {
   async getDisputesStatusCountByUserId(userId: string) {
     try {
       const [resolved, inProgress, open, rejected] = await Promise.all([
-        this.db.dispute.count({ where: { userId, status: 'RESOLVED' } }),
-        this.db.dispute.count({ where: { userId, status: 'INPROGRESS' } }),
-        this.db.dispute.count({ where: { userId, status: 'OPEN' } }),
-        this.db.dispute.count({ where: { userId, status: 'REJECTED' } }),
+        this.db.dispute.count({ where: { OR: [{ buyerId: userId }, { sellerId: userId }], status: 'RESOLVED' } }),
+        this.db.dispute.count({ where: { OR: [{ buyerId: userId }, { sellerId: userId }], status: 'INPROGRESS' } }),
+        this.db.dispute.count({ where: { OR: [{ buyerId: userId }, { sellerId: userId }], status: 'OPEN' } }),
+        this.db.dispute.count({ where: { OR: [{ buyerId: userId }, { sellerId: userId }], status: 'REJECTED' } }),
       ]);
 
       return { resolved, inProgress, open, rejected };
