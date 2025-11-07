@@ -6,7 +6,6 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -21,6 +20,7 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, documentFactory);
 
   app.enableCors();
+
 
   app.useGlobalFilters(new AllExceptionsFilter());
 

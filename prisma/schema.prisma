@@ -70,6 +70,7 @@ model Transaction {
   currency       String    @default("GHS")
   description    String?
   deliveryDate   DateTime?
+  releaseRequested Boolean   @default(false)
 
   // RELATIONS
   commission Commission?

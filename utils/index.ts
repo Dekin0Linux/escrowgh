@@ -8,4 +8,7 @@ export const generateUserTransCode = () => `ESGH-${nanoid()}`;
 export const generateShopCode = () => `${sixDigitsCode()}`;
 export const releaseRef = () => `RELEASE-${nanoid()}`;
 
+// generate transaction id of 12 numerics
+export const generateTransactionId = () => customAlphabet('1234567890', 12);
+
 

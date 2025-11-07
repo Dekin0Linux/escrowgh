@@ -73,7 +73,7 @@ async function verifyOTP(otpValue, phonenumber) {
         console.error(error);
     }
 
-    return resp?.data.message;
+    return resp?.data;
 }
 
 

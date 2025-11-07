@@ -5,15 +5,19 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { JwtBlockGuard } from 'src/common/guards/jwt-block.guard';
+import { TransactionStatus } from '@prisma/client';
+
 
 
 @ApiBearerAuth() 
+@UseGuards(JwtBlockGuard) //prevent routes from blocked users
 @Controller('transaction')
 export class TransactionController {
 
   constructor(private readonly transactionService: TransactionService) { }
 
-  // Define your endpoints here, e.g.:
+  // GET ALL TRANSACTIONS
   @UseGuards(JwtAuthGuard, IsAdminGuard)
   @Get()
   async getAllTransactions(@Query() paginationDto: { limit?: number; page?: number }) {
@@ -163,6 +167,23 @@ export class TransactionController {
    async getAnalytics() {
      return this.transactionService.getAnalytics();
    }
+
+  //  request payment
+  // @UseGuards(JwtAuthGuard)
+  @Post(':id/requestPayment')
+  async requestPayment(@Param('id') transactionId: string, @Request() req: any) {
+    // assume you set req.user.id in your AuthGuard
+    const userId = req.user.userId;
+    const result = await this.transactionService.requestReleaseFund(transactionId,userId);
+    return result;
+  }
+
+  // get transactions require attention
+  // @UseGuards(JwtAuthGuard, IsAdminGuard)
+  @Get('/getTransactionsRequireAttention')
+  async getTransactionsRequireAttention(@Query() query: { status: TransactionStatus }) {
+    return this.transactionService.getTransactionsRequireAttention(query.status);
+  }
 
 
 }

@@ -323,6 +323,11 @@ export class DisputeService {
     }
   }
 
+  // update dispute status
+  /*
+  @param disputeId: string
+  @param status: DisputeStatus
+  */
   async updateDisputeStatus(disputeId: string, status: DisputeStatus) {
     try {
       const updatedDispute = await this.db.dispute.update({
@@ -334,6 +339,32 @@ export class DisputeService {
       throw new InternalServerErrorException('Failed to update dispute status.', error);
     }
   }
+
+  // dispute require attention (dispute opened for more than x number of days)
+ async getDisputesRequireAttention(days?: number, status?: DisputeStatus) {
+  try {
+    // Default values
+    const numberOfDays = days || 3;
+    const disputeStatus = status || DisputeStatus.OPEN;
+
+    const disputes = await this.db.dispute.findMany({
+      where: {
+        createdAt: {
+          lte: new Date(Date.now() - numberOfDays * 24 * 60 * 60 * 1000),
+        },
+        status: disputeStatus, // ensure consistent casing
+      },
+    });
+
+    return disputes;
+  } catch (error) {
+    throw new InternalServerErrorException(
+      'Failed to fetch disputes requiring attention',
+      error,
+    );
+  }
+}
+
 
 
 

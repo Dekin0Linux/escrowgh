@@ -40,8 +40,8 @@ import { ShopModule } from './shop/shop.module';
     ShopModule,
     
   ],
-  controllers: [AppController, NotificationController, ShopController],
-  providers: [AppService, CloudinaryService, NotificationService, EventsGateway],
+  controllers: [AppController, NotificationController, ShopController], //specifies controllers we want to use in other modules of our app
+  providers: [AppService, CloudinaryService, NotificationService, EventsGateway], //specifies services we want to use in other modules of our app
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

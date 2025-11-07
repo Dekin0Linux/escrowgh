@@ -4,6 +4,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { IsAdminGuard } from 'src/common/guards/is-admin.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { DisputeStatus } from '@prisma/client';
 
 @ApiBearerAuth() 
 @Controller('dispute')
@@ -65,6 +66,13 @@ export class DisputeController {
     @Put('updateDisputeStatus/:id')
     async updateDisputeStatus(@Param('id') id: string, @Body('status') status: any) {
         return this.disputeService.updateDisputeStatus(id, status);
+    }
+
+    // get disputes require attention
+    @UseGuards(JwtAuthGuard,IsAdminGuard)
+    @Get('getDisputesRequireAttention')
+    async getDisputesRequireAttention(@Query('days') days?: number, @Query('status') status?: DisputeStatus) {
+        return this.disputeService.getDisputesRequireAttention(days, status);
     }
 
 
