@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
-import { generateUserTransCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
+import { generateUserTransCode, getNetworkCode, releaseRef } from '../../utils/index'; // Adjust the import path as necessary
 import { sendSMS } from '../../utils/sms';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
@@ -511,10 +511,11 @@ export class TransactionService {
 
       // SEND THE MONEY TO THE SELLER MOMONUMBER
       if (transaction?.sellerMomoNumber) {
+        // RELEASE FUND API RUNNING HERE
         try {
           const response = await transferPayment({
             sellerMomoNumber: transaction?.sellerMomoNumber,
-            network: "MTN",
+            network:  getNetworkCode(transaction?.sellerMomoNumber!),
             amount: transaction?.amount,
             "r-switch": "FLT",
             desc: `Release of funds for transaction ${transaction?.transCode}`,
@@ -522,7 +523,8 @@ export class TransactionService {
           })
 
           if (response?.status === "approved" && response?.code === "000") {
-            console.log(response)
+
+            // === UPDATING RECORD AND SENDING NOTIFICATIONS
             // Create settlement record
             await this.db.settlement.create({
               data: {
@@ -583,14 +585,31 @@ export class TransactionService {
             // send response to user 
             return { message: 'Funds released to seller.' ,response };
 
+            // === UPDATING RECORD AND SENDING NOTIFICATIONS ===
+
           } else {
-            throw new BadRequestException('Failed to release funds.');
+            console.log(response)
+            throw new BadRequestException(response?.reason);
+
           }
         } catch (error) {
-          throw new BadRequestException(error);
+          if(error.status === 400){
+            throw new BadRequestException(error);
+          }
+          if (error.status === 422) {
+            const errors = error.response.data;
+            console.log(errors)
+            // Extract the first error message
+            const firstError =
+                Object.values(errors)?.[0]?.[0] || 'An unknown validation error occurred.';
+            throw new BadRequestException(firstError);
+        }
+          console.log(error)
+          throw new InternalServerErrorException('Failed to release funds.', error);
         }
 
       }
+      // END RELEASE FUND API RUNNING HERE
 
 
     } catch (error) {
