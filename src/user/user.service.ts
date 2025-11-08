@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 const { generateUserCode } = require('../../utils/index');
 import { PrismaClient, Prisma } from '@prisma/client';
@@ -59,6 +59,7 @@ export class UserService {
       });
 
       const access_token = this.generateToken(newUser);
+
       let smsMsg = `Welcome ${newUser.name}, your account has been created successfully. Please login to your account to start using our services.`;
       sendSMS(newUser?.phone!, smsMsg);
 
@@ -73,11 +74,17 @@ export class UserService {
         },
         access_token,
       };
+
+      
     } catch (error) {
       if (error.code === 'P2002') {
         throw new BadRequestException(`Duplicate field: ${error.meta?.target}`);
       }
-      throw new BadRequestException('Could not create user');
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        console.log(error)
+        throw error;
+      }
+      throw new InternalServerErrorException('Could not create user');
     }
   }
 
@@ -163,6 +170,10 @@ export class UserService {
       if (error.code === 'P2025') {
         throw new NotFoundException('User not found');
       }
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
       throw new BadRequestException('Failed to update user');
     }
   }
@@ -174,6 +185,10 @@ export class UserService {
       await this.db.user.delete({ where: { id } });
       return { message: "User deleted successfully" }
     } catch (error) {
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
       throw new NotFoundException('User not found');
     }
   }
@@ -186,8 +201,12 @@ export class UserService {
         throw new NotFoundException('User not found');
       }
       generateOTP(phone)
-    } catch (err) {
-      throw new BadRequestException(err);
+    } catch (error) {
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
+      throw new BadRequestException(error);
     }
   }
 
@@ -203,8 +222,12 @@ export class UserService {
         throw new BadRequestException(resp);
       }
       return {message:"Otp verified successfully"}
-    } catch (err) {
-      throw new BadRequestException(err);
+    } catch (error) {
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
+      throw new BadRequestException(error);
     }
   }
 
@@ -222,6 +245,10 @@ export class UserService {
       });
       return { message: "User password changed successfully" }
     } catch (error) {
+      
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+        throw error; // ✅ Let NestJS handle known HTTP errors
+      }
       throw new BadRequestException('Failed to change password');
     }
   }
