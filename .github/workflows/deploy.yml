@@ -32,12 +32,21 @@ jobs:
           
             echo "🔨 Building NestJS project..."
             npm run build
+
+            echo "moving in src"
+            cd dist/src
           
             echo "🚀 Restarting NestJS app with PM2..."
-            if pm2 list | grep -q escrowapi; then
-              pm2 restart dist/src/main.js --name escrowapi
-            else
-              pm2 start ecosystem.config.js --only escrowapi
+            if pm2 list | grep -q xcrowpay-api; then
+              echo "🛑 Stopping existing PM2 process..."
+              pm2 stop xcrowpay-api
+            
+              echo "🗑️ Deleting old PM2 process..."
+              pm2 delete xcrowpay-api
             fi
+
+            # Start a fresh process
+            echo "🚀 Starting new PM2 process..."
+            pm2 start main.js --name xcrowpay-api --watch
           
             echo "✅ Deploy complete!"
